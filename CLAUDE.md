@@ -1,0 +1,437 @@
+Perfect! I'll create a comprehensive Claude.md file that gives AI coders complete context to implement this project. This will serve as the master reference document.
+
+``````
+# CLAUDE.md - Text-Fabric BHSA Research Assistant
+
+## Project Overview
+
+**Project Name**: AI-Enhanced Text-Fabric BHSA Browser  
+**Goal**: Transform Text-Fabric into an AI-powered biblical Hebrew research platform accessible via natural language  
+**Status**: Design complete, implementation pending  
+**Stack**: Python 3.13, Text-Fabric, Flask, Claude API (Anthropic), Systemd
+
+## What We're Building
+
+An intelligent research assistant for biblical Hebrew that:
+1. Runs persistently on a Fedora server (accessible via Tailscale)
+2. Generates Text-Fabric queries from natural language
+3. Answers complex linguistic questions through multi-step reasoning
+4. Provides statistically rigorous answers with biblical citations
+5. Displays English translations alongside Hebrew text
+
+## System Architecture
+
+```
+User (Mac/iPhone/Browser)
+    ↓ (via Tailscale)
+Fedora Server (atlas)
+    ├─ Text-Fabric (BHSA corpus)
+    ├─ Flask Web Server
+    ├─ Claude API Integration
+    └─ Systemd Service (persistence)
+
+Flow: Natural Language Question → Claude Agent → Query Generation → 
+      Text-Fabric Execution → Result Analysis → Synthesis → Answer
+``````
+
+## Core Components
+
+### 1. Persistent Hosting
+- **Current State**: Text-Fabric runs but binds only to localhost
+- **Needed**: 
+  - Modify Text-Fabric to bind to `0.0.0.0` (not localhost)
+  - Create systemd service for 24/7 operation
+  - Configure auto-restart on failure
+
+**File to modify**: `~/textfabric-env/lib64/python3.13/site-packages/tf/parameters.py`
+```
+# Change from:
+HOST = "localhost"
+# To:
+HOST = "0.0.0.0"
+``````
+
+**Systemd service**: `/etc/systemd/system/textfabric.service`
+
+### 2. AI Query Generator
+- **Input**: Natural language (e.g., "Find plural verbs in Genesis")
+- **Output**: Valid Text-Fabric query template
+- **Method**: Claude API with RAG/few-shot prompting
+- **Key Files**:
+  - `bhsa_lexemes.csv` - 8000+ Hebrew lexemes with glosses (ATTACHED)
+  - BHSA feature documentation (needs creation)
+  - Working query examples (30+ verified queries)
+
+### 3. AI Research Assistant (Main Feature)
+- **Input**: Complex linguistic questions
+- **Process**: 
+  1. Break question into sub-questions
+  2. Generate multiple Text-Fabric queries
+  3. Execute queries against BHSA
+  4. Analyze results (statistics, patterns, exceptions)
+  5. Synthesize findings with citations
+- **Output**: Academic answer with examples and references
+
+**Implementation Pattern**: ReAct (Reasoning + Acting + Observing)
+
+### 4. Text-Fabric Python Bridge
+Tools that Claude can call:
+
+| Tool | Purpose | Input | Output |
+|------|---------|-------|--------|
+| `run_query(query, explanation)` | Execute TF template | Query string | List of node tuples |
+| `get_word_info(node_ids)` | Get grammatical features | List[int] | List[dict] with features |
+| `aggregate_results(results, feature)` | Count feature values | Results + feature name | Dict[value, count] |
+| `get_adjacent_words(node, direction)` | Find surrounding words | Node ID + direction | Word info dict |
+| `get_references(node_ids)` | Get biblical citations | List[int] | List[str] (Gen 1:1 format) |
+| `get_context(node, level)` | Get phrase/clause info | Node ID + level | Context dict |
+
+### 5. Frontend Enhancements
+- Chat interface for AI questions
+- Query suggestion box
+- English translation toggle
+- Mobile-responsive design
+
+## Critical Technical Details
+
+### BHSA Feature Names (VERIFIED)
+**Word-level features**:
+- `sp` (part of speech): verb, subs, adjv, advb, prep, conj, intj, art, prn
+- `lex` (lexeme): NTN, BN/, KXC, JHWH, MCH (transliterated Hebrew roots)
+- `gn` (gender): m, f
+- `nu` (number): sg, pl, du
+- `ps` (person): p1, p2, p3
+- `st` (state): a (absolute), c (construct), e (emphatic)
+- `vs` (verb stem): qal, niphal, piel, pual, hiphil, hophal, hithpael
+- `vt` (verb tense): perf, impf, wayq, juss, coh, impv, infa, infc, ptcp
+- `g_word_utf8` (Hebrew text)
+- `g_cons_utf8` (consonantal text)
+- `gloss` (English meaning)
+
+**Phrase-level features**:
+- `function`: Subj, Pred, Objc, Cmpl, etc.
+- `typ`: Advc, Adjc, etc.
+- `rela`: yes, no
+
+**Clause-level features**:
+- `typ`: NmCl, WayX, XYqt, etc.
+
+### Query Syntax (Critical)
+```
+# Indentation = containment
+clause
+  phrase function=Pred
+    word sp=verb
+
+# Named nodes for relationships
+w1:word lex=NTN
+w2:word sp=subs
+w1 < w2
+
+# Adjacency
+w1:word :> w2:word
+
+# Book/chapter scoping
+book book=Genesis
+  chapter
+    verse
+      word lex=JHWH
+``````
+
+### Common Errors to Avoid
+❌ `word pos=verb` → ✅ `word sp=verb`
+❌ `word gender=m` → ✅ `word gn=m`
+❌ `phrase typ=Pred` → ✅ `phrase function=Pred`
+❌ `word lex=JHWH/` → ✅ `word lex=JHWH`
+
+## Files Provided
+
+1. **bhsa_lexemes.csv** (attached) - Complete lexeme database
+2. **searchusage.html** (attached) - Official Text-Fabric query syntax
+3. **System prompts** (5 specialized prompts for Claude) - see previous conversation
+4. **BHSA-Query-Guide.md** - Initial feature reference (HAS ERRORS, needs verification)
+5. **Claude-BHSA-Research.md** - Implementation roadmap
+
+## Implementation Phases
+
+### Phase 1: Persistent Hosting (2-3 hours)
+**Tasks**:
+- [ ] Modify `parameters.py` to bind to 0.0.0.0
+- [ ] Create systemd service file
+- [ ] Enable and start service
+- [ ] Test access via Tailscale IP
+- [ ] Verify auto-restart on reboot
+
+**Files to create**:
+- `/etc/systemd/system/textfabric.service`
+
+**Commands**:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable textfabric.service
+sudo systemctl start textfabric.service
+sudo systemctl status textfabric.service
+``````
+
+### Phase 2: Verified Documentation (4-6 hours)
+**Tasks**:
+- [ ] Run Text-Fabric Python API to extract all features
+- [ ] Verify feature names and values from actual BHSA instance
+- [ ] Create 30+ working query examples (MUST TEST EACH)
+- [ ] Document all valid values for key features (sp, gn, nu, etc.)
+- [ ] Fix errors in BHSA-Query-Guide.md
+
+**Python script to run**:
+```python
+from tf.app import use
+A = use('etcbc/bhsa')
+F = A.api.F
+
+# Get all features
+print(F.otype.all)
+
+# Get valid values for each feature
+for feature in ['sp', 'gn', 'nu', 'st', 'vs', 'vt']:
+    values = sorted(set(getattr(F, feature).v(w) for w in F.otype.s('word') if getattr(F, feature).v(w)))
+    print(f"{feature}: {values}")
+
+# For phrases
+phrase_functions = sorted(set(F.function.v(p) for p in F.otype.s('phrase') if F.function.v(p)))
+print(f"phrase function: {phrase_functions}")
+``````
+
+### Phase 3: Text-Fabric Python Wrapper (6-8 hours)
+**File**: `tf_tools.py`
+
+**Class structure**:
+```
+class TextFabricTools:
+    def __init__(self):
+        self.A = use('etcbc/bhsa')
+        self.F = self.A.api.F
+        self.L = self.A.api.L
+        self.T = self.A.api.T
+        self.lexemes = pd.read_csv('bhsa_lexemes.csv')
+    
+    def run_query(self, query: str) -> dict:
+        """Execute query, return {success, count, results}"""
+    
+    def get_word_info(self, node_ids: List[int]) -> List[dict]:
+        """Extract all grammatical features for words"""
+    
+    def aggregate_results(self, results, feature: str) -> dict:
+        """Count occurrences of feature values"""
+    
+    def get_adjacent_words(self, node: int, direction: int) -> dict:
+        """Get next/previous word"""
+    
+    def get_references(self, node_ids: List[int]) -> List[str]:
+        """Get biblical citations (Gen 1:1 format)"""
+    
+    def get_context(self, node: int, context_type: str) -> dict:
+        """Get containing phrase/clause/verse"""
+``````
+
+### Phase 4: Claude Integration (8-10 hours)
+**File**: `claude_agent.py`
+
+**Components**:
+- Anthropic client setup
+- Tool definitions (JSON schemas)
+- ReAct agent loop (max 15 iterations)
+- Tool execution routing
+- Response synthesis
+
+**Key libraries**:
+```python
+from anthropic import Anthropic
+import json
+from typing import List, Dict, Any
+``````
+
+**System prompt**: Use Prompt #1 from previous message (MAIN SYSTEM PROMPT)
+
+**Tool definitions**: Use Prompt #5 (JSON schema)
+
+### Phase 5: Flask Integration (4-5 hours)
+**File**: Modified Text-Fabric Flask app
+
+**New routes**:
+```
+@app.route('/api/ask', methods=['POST'])
+def ask_ai():
+    """Main AI endpoint"""
+    question = request.json['question']
+    answer = assistant.answer_question(question)
+    return jsonify({'answer': answer})
+
+@app.route('/api/generate_query', methods=['POST'])
+def generate_query():
+    """Simple query generation"""
+    description = request.json['description']
+    query = assistant.generate_query(description)
+    return jsonify({'query': query})
+
+@app.route('/api/validate_query', methods=['POST'])
+def validate_query():
+    """Verify query syntax"""
+    query = request.json['query']
+    validation = assistant.validate_query(query)
+    return jsonify(validation)
+``````
+
+### Phase 6: Frontend UI (3-4 hours)
+**Add to existing Text-Fabric browser**:
+- Chat box interface (HTML/CSS/JavaScript)
+- Query suggestion dropdown
+- English translation toggle
+- Mobile responsive styling
+
+**JavaScript**:
+```javascript
+async function askAI(question) {
+    const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question: question})
+    });
+    return await response.json();
+}
+``````
+
+## Testing Strategy
+
+### Unit Tests
+- Test each tool individually with known inputs
+- Verify query syntax validation
+- Test lexeme lookup accuracy
+
+### Integration Tests
+- Simple question → query generation → execution → results
+- Complex question → multi-query reasoning → synthesis
+- Error handling (invalid queries, timeout, etc.)
+
+### Test Questions
+**Simple**:
+1. "Find all plural feminine verbs"
+2. "Show me instances of BN/ in construct"
+3. "List divine names in Genesis"
+
+**Complex**:
+1. "Which forms does BN/ take in construct state?"
+2. "Is 'deny' always used with Bet preposition?"
+3. "What are the most common verb stems with >MR?"
+
+**Expected success rate**: >85% accuracy on validated test set
+
+## Environment Variables
+
+```
+# .env file
+ANTHROPIC_API_KEY=sk-ant-...
+TF_DATA_PATH=/home/teapot/text-fabric-data
+LEXEME_CSV_PATH=/home/teapot/bhsa_lexemes.csv
+FLASK_PORT=14897
+``````
+
+## Dependencies
+
+```txt
+# requirements.txt
+text-fabric>=12.4.5
+anthropic>=0.7.0
+flask>=3.0.0
+pandas>=1.3.0
+python-dotenv>=0.19.0
+requests>=2.28.0
+``````
+
+## Performance Considerations
+
+- **Query result limits**: Cap at 100 nodes for analysis (pagination)
+- **Timeout**: 30 seconds per query execution
+- **Iteration limit**: Max 15 Claude tool calls per question
+- **Caching**: Consider caching common queries
+- **Rate limiting**: Claude API has rate limits (monitor usage)
+
+## Security
+
+- Never expose API keys in code
+- Use environment variables for secrets
+- Tailscale provides encrypted mesh network (no firewall changes needed)
+- Text-Fabric runs as non-root user
+- No write access to BHSA corpus data
+
+## Success Criteria
+
+✅ Text-Fabric accessible from phone via Tailscale  
+✅ Simple queries work: "Find verbs" → correct results  
+✅ Complex questions get multi-step analysis with citations  
+✅ Query accuracy >95% (generates valid Text-Fabric syntax)  
+✅ Answers include Hebrew text + transliteration + references  
+✅ System handles 5+ iterations for complex questions  
+✅ Systemd service restarts on failure  
+
+## Known Issues & Limitations
+
+1. **BHSA-Query-Guide.md has errors** - needs verification against live instance
+2. **Feature `typ` vs `function` confusion** - phrases use `function`, not `typ`
+3. **Large result sets slow** - implement pagination
+4. **Claude rate limits** - may need request throttling
+5. **No English translations yet** - need data source (ESV API?)
+
+## File Structure
+
+```
+/home/teapot/
+├── textfabric-env/           # Python virtual environment
+├── text-fabric-data/         # BHSA corpus data
+├── bhsa_lexemes.csv          # Lexeme reference (PROVIDED)
+├── tf_tools.py               # Text-Fabric wrapper (TO CREATE)
+├── claude_agent.py           # AI agent (TO CREATE)
+├── app.py                    # Modified Flask app (TO MODIFY)
+├── .env                      # Environment variables (TO CREATE)
+├── requirements.txt          # Dependencies (TO CREATE)
+└── documentation/
+    ├── bhsa_features_verified.md    # Verified features (TO CREATE)
+    ├── working_queries.md           # 30+ tested queries (TO CREATE)
+    └── system_prompts.txt           # Claude prompts (PROVIDED in conversation)
+``````
+
+## Getting Started (For AI Coder)
+
+1. **First**: Verify all BHSA features by running the Python script in Phase 2
+2. **Then**: Create `tf_tools.py` with all 6 tools
+3. **Then**: Implement `claude_agent.py` with ReAct loop
+4. **Then**: Test with simple questions
+5. **Then**: Modify Flask app to add API routes
+6. **Finally**: Add frontend chat interface
+
+## References
+
+- Text-Fabric docs: https://annotation.github.io/text-fabric/
+- BHSA features: https://etcbc.github.io/bhsa/features/
+- Claude API: https://docs.anthropic.com/
+- System prompts: See conversation history (5 prompts provided)
+
+## Questions for Implementation
+
+When implementing, clarify:
+1. Should English translations be from API or pre-loaded data?
+2. What's the preferred UI framework for chat interface? (vanilla JS, React, Vue?)
+3. Should we cache query results? If so, what's the eviction policy?
+4. What's the preferred error handling strategy for Claude API failures?
+5. Should we log all queries for analysis/improvement?
+
+## Contact & Context
+
+- **User**: Technical, runs Arch/Fedora Linux, uses Tailscale
+- **Skill level**: Can run Python scripts, comfortable with terminal
+- **Context**: Building this for personal biblical Hebrew research
+- **Priority**: Accuracy over speed; academic-quality answers
+
+***
+
+**Important**: This document should be treated as the single source of truth for this project. All implementation decisions should reference back to this document. Update this file as the project evolves.
+```
+

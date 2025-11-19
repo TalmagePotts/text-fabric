@@ -281,6 +281,20 @@ showMath: boolean, optional False
         If you have a corpus where the character `$` is used in an ordinary way,
         this option should be set to `False`.
 
+showEnglish: boolean, optional False
+    **interface option**
+    indicates whether plain and pretty displays should show English translations
+    alongside Hebrew text. Uses BSB (Berean Study Bible) translations from the
+    OpenHebrewBible project.
+
+    !!! note "BHSA only"
+        This option is only available for the BHSA (Biblia Hebraica Stuttgartensia
+        Amstelodamensis) corpus. For other corpora, this option has no effect.
+
+    !!! caution "data files required"
+        Requires translation data files in the English-lineup directory.
+        If files are not found, translations will not be shown.
+
 skipCols: set, optional set()
     indicates columns to skip in `show()`, `table()`;
     no effect on `prettyTuple()` and `plainTuple()`.
@@ -486,6 +500,14 @@ INTERFACE_OPTIONS = (
         "math",
         "mathematical formulas",
         "Interpret material within pairs of `$` as formulas in TeX notation.",
+        False,
+    ),
+    (
+        "showEnglish",
+        False,
+        "english",
+        "English translation",
+        "Show English translations from BSB alongside Hebrew text.",
         False,
     ),
 )

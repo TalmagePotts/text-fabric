@@ -98,6 +98,16 @@ a:hover {
     text-decoration: underline | important;
     color: #0000ff | important;
 }
+/* English translation styling */
+.english-trans {
+    font-family: sans-serif;
+    font-size: small;
+    color: #666;
+    font-style: italic;
+    margin-left: 0.3em;
+    direction: ltr;
+    unicode-bidi: embed;
+}
 .ltr {
     direction: ltr ! important;
     unicode-bidi: embed;

@@ -27,6 +27,7 @@ from .helpers import htmlSafe, NB, dh
 from .highlight import getEdgeHlAtt
 from .unravel import _unravel
 from ..core.helpers import NBSP, TO_SYM, FROM_SYM, htmlEsc, flattenToSet
+from .english import get_english_provider
 
 
 def render(app, isPretty, n, _inTuple, _asString, explain, **options):
@@ -300,6 +301,16 @@ def _plainTree(
             material = htmlSafe(text, isHtml, math=showMath)
             cb = f'<span class="{textCls}">'
             ce = "</span>"
+            
+            # Add English translation if enabled
+            showEnglish = getattr(options, 'showEnglish', False)
+            if showEnglish and nType == "word":
+                english_provider = get_english_provider()
+                if english_provider.enabled:
+                    trans = english_provider.get_translation(n)
+                    if trans and trans['english']:
+                        english_text = trans['english']
+                        material = f'{material}<span class="english-trans"> ({english_text})</span>'
 
             # a <br> in flex box has no effect
             # so we create a "breaking" span by setting the width to 100% and
@@ -731,7 +742,7 @@ def _getFeatures(info, n, nType):
                         else (
                             (
                                 f'<span class="e" edge="{name}" nd="{refNode}">'
-                                f"{name}•</span>"
+                                f"{name}?</span>"
                             )
                             if name in allEFeats
                             else f'<span class="f">{name}=</span>'

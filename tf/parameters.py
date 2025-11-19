@@ -162,7 +162,8 @@ URL_TF_DOCS = "https://annotation.github.io/text-fabric/tf"
 
 
 PROTOCOL = "http://"
-HOST = "localhost"  #
+HOST = "0.0.0.0"  # Bind to all interfaces for remote access
+HOST_DISPLAY = "localhost"  # Display hostname for browser URL
 PORT_BASE = 10000
 
 

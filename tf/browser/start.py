@@ -81,7 +81,7 @@ from multiprocessing import Process
 from time import sleep
 
 from ..core.helpers import console
-from ..parameters import BANNER, PROTOCOL, HOST
+from ..parameters import BANNER, PROTOCOL, HOST, HOST_DISPLAY
 
 from .command import argNoweb, argApp, getPort
 from .web import setup, runWeb
@@ -243,7 +243,7 @@ def main(cargs=sys.argv[1:]):
 
     portWeb = getPort(argApp(cargs, True))
     noweb = argNoweb(cargs)
-    url = f"{PROTOCOL}{HOST}:{portWeb}{toolUrl}"
+    url = f"{PROTOCOL}{HOST_DISPLAY}:{portWeb}{toolUrl}"
 
     webapp = setup(debug, *cargs)
 

@@ -1,0 +1,15 @@
+# Text-Fabric Requirements
+# 
+# Installation:
+#   1. pip install -e .                    # Installs Text-Fabric core (from setup.cfg)
+#   2. pip install -r requirements.txt     # Installs AI dependencies (this file)
+#
+# Or install everything:
+#   pip install -e . && pip install -r requirements.txt
+
+# AI/ML Dependencies (for natural language query generation)
+google-generativeai>=0.3.0
+pandas>=1.3.0
+
+# Note: Core Text-Fabric dependencies (flask, requests, markdown, pyyaml, ipython, wheel)
+# are automatically installed via setup.cfg when you run: pip install -e .

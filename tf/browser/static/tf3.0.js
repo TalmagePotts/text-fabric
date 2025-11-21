@@ -955,6 +955,37 @@ const initAIQueryGenerator = () => {
   const aiExplanation = $("#aiExplanation")
   const queryTextarea = $("#query")
 
+  // Storage key for API key
+  const API_KEY_STORAGE = "tf_gemini_api_key"
+
+  // Load saved API key on initialization
+  const savedKey = localStorage.getItem(API_KEY_STORAGE)
+  if (savedKey) {
+    apiKey.val(savedKey)
+    aiStatus.html('<span class="info">🔑 API key loaded from browser storage</span>')
+  }
+
+  // Save API key to localStorage when it changes
+  apiKey.on("input", () => {
+    const key = apiKey.val().trim()
+    if (key) {
+      localStorage.setItem(API_KEY_STORAGE, key)
+    } else {
+      localStorage.removeItem(API_KEY_STORAGE)
+    }
+  })
+
+  // Clear API key button
+  const clearBtn = $("#clearApiKey")
+  clearBtn.off("click").click(e => {
+    e.preventDefault()
+    if (confirm("Clear saved API key from browser storage?")) {
+      localStorage.removeItem(API_KEY_STORAGE)
+      apiKey.val("")
+      aiStatus.html('<span class="info">🗑️ API key cleared from storage</span>')
+    }
+  })
+
   generateBtn.off("click").click(async e => {
     e.preventDefault()
 

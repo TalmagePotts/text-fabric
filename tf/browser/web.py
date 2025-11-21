@@ -197,6 +197,7 @@ def factory(web):
         """Generate Text-Fabric query from natural language using AI."""
         from flask import request, jsonify
         from .ai_query import generate_query
+        import os
         
         try:
             data = request.get_json()
@@ -211,6 +212,10 @@ def factory(web):
             user_prompt = data.get('prompt', '').strip()
             api_key = data.get('api_key', '').strip()
             
+            # Fall back to environment variable if no API key provided
+            if not api_key:
+                api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+            
             if not user_prompt:
                 return jsonify({
                     'query': '',
@@ -224,7 +229,7 @@ def factory(web):
                     'query': '',
                     'explanation': '',
                     'lexemes_used': [],
-                    'error': 'API key is required'
+                    'error': 'API key is required. Either enter it in the UI or set GEMINI_API_KEY environment variable.'
                 }), 400
             
             # Generate the query

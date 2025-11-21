@@ -91,7 +91,7 @@ def build_system_prompt() -> str:
 
 ## KEY FEATURES
 - sp: verb, subs, nmpr, adjv, advb, prep, conj, intj, art, prps, prde, prin, inrg, nega
-- lex: exact from database (e.g. NTN[, JHWH/, BR>[, >T)
+- lex: exact from database (e.g. NTN[, JHWH/, BR>[, >T, >CR)
 - gn: m, f | nu: sg, pl, du | ps: p1, p2, p3
 - st: a, c, e | vs: qal, nif, piel, pual, hif, hof, hith
 - vt: perf, impf, wayq, coh, impv, infc, infa
@@ -131,8 +131,14 @@ clause
   l:word lex=L
   l :> w
 
-## OUTPUT
-Return ONLY the query. No explanations, no markdown blocks, no extra text. Use 2-space indentation."""
+Dependent clauses starting with "asher":
+clause
+  word lex=>CR
+
+## OUTPUT FORMAT - CRITICAL
+RESPOND WITH ONLY THE QUERY CODE. NO EXPLANATIONS. NO COMMENTARY. NO MARKDOWN.
+Just the query itself. Keep it SHORT and SIMPLE.
+Start your response immediately with the query."""
 
 
 def build_user_prompt(user_input: str, lexemes: List[Dict[str, str]]) -> str:
@@ -172,7 +178,8 @@ def extract_keywords(user_input: str) -> List[str]:
         'give', 'create', 'say', 'see', 'make', 'go', 'come', 'take',
         'YHWH', 'God', 'lord', 'heaven', 'earth', 'man', 'woman',
         'day', 'night', 'light', 'darkness', 'water', 'land',
-        'verb', 'noun', 'preposition', 'Lamed', 'to', 'in', 'from'
+        'verb', 'noun', 'preposition', 'Lamed', 'to', 'in', 'from',
+        'asher', 'which', 'that', 'who'
     ]
     
     user_lower = user_input.lower()
@@ -296,7 +303,7 @@ def generate_query(user_prompt: str, api_key: str) -> Dict[str, any]:
                     temperature=0.1,
                     top_p=0.95,
                     top_k=40,
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,  # Increased from 1024 to handle longer queries
                 ),
                 safety_settings=[
                     {

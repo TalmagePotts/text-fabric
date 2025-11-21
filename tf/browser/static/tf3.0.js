@@ -965,6 +965,18 @@ const initAIQueryGenerator = () => {
     aiStatus.html('<span class="info">🔑 API key loaded from browser storage</span>')
   }
 
+  // Helper link for getting API key
+  const apiKeyHelper = $("#apiKeyHelper")
+  
+  const updateApiKeyHelper = () => {
+    const key = apiKey.val().trim()
+    if (key) {
+      apiKeyHelper.hide()
+    } else {
+      apiKeyHelper.show()
+    }
+  }
+  
   // Save API key to localStorage when it changes
   apiKey.on("input", () => {
     const key = apiKey.val().trim()
@@ -973,7 +985,11 @@ const initAIQueryGenerator = () => {
     } else {
       localStorage.removeItem(API_KEY_STORAGE)
     }
+    updateApiKeyHelper()
   })
+  
+  // Initial check on page load
+  updateApiKeyHelper()
 
   // Clear API key button
   const clearBtn = $("#clearApiKey")
@@ -982,6 +998,7 @@ const initAIQueryGenerator = () => {
     if (confirm("Clear saved API key from browser storage?")) {
       localStorage.removeItem(API_KEY_STORAGE)
       apiKey.val("")
+      updateApiKeyHelper()
       aiStatus.html('<span class="info">🗑️ API key cleared from storage</span>')
     }
   })
@@ -1024,7 +1041,16 @@ const initAIQueryGenerator = () => {
         })
       })
 
-      const data = await response.json()
+      // Read response as text first, then try to parse as JSON
+      const responseText = await response.text()
+      
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        aiStatus.html(`<span class="error">❌ Server returned invalid response. Expected JSON but got: ${responseText.substring(0, 200)}</span>`)
+        return
+      }
 
       if (!response.ok || data.error) {
         aiStatus.html(`<span class="error">❌ Error: ${data.error || 'Unknown error'}</span>`)

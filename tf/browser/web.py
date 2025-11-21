@@ -196,8 +196,25 @@ def factory(web):
     def serveAIQuery():
         """Generate Text-Fabric query from natural language using AI."""
         from flask import request, jsonify
-        from .ai_query import generate_query
         import os
+        
+        try:
+            # Import here to catch import errors
+            from .ai_query import generate_query
+        except ImportError as e:
+            return jsonify({
+                'query': '',
+                'explanation': '',
+                'lexemes_used': [],
+                'error': f'AI query module failed to load: {str(e)}. Make sure google-generativeai is installed.'
+            }), 500
+        except Exception as e:
+            return jsonify({
+                'query': '',
+                'explanation': '',
+                'lexemes_used': [],
+                'error': f'Failed to initialize AI module: {str(e)}'
+            }), 500
         
         try:
             data = request.get_json()

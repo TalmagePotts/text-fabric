@@ -306,6 +306,8 @@ tf/advanced/app.py
 tf/advanced/condense.py
 tf/advanced/data.py
 tf/advanced/display.py
+tf/advanced/english.py
+tf/advanced/english_config.py
 tf/advanced/find.py
 tf/advanced/helpers.py
 tf/advanced/highlight.py
@@ -323,6 +325,7 @@ tf/advanced/unravel.py
 tf/advanced/volumes.py
 tf/advanced/zipdata.py
 tf/browser/__init__.py
+tf/browser/ai_query.py
 tf/browser/command.py
 tf/browser/html.py
 tf/browser/kernel.py
@@ -474,10 +477,6 @@ tf/client/make/build.py
 tf/client/make/config.yaml
 tf/client/make/gh.py
 tf/client/make/help.py
-tf/client/make/__pycache__/__init__.cpython-313.pyc
-tf/client/make/__pycache__/build.cpython-313.pyc
-tf/client/make/__pycache__/gh.cpython-313.pyc
-tf/client/make/__pycache__/help.cpython-313.pyc
 tf/client/static/favicon.ico
 tf/client/static/version.yaml
 tf/client/static/css/ls.css

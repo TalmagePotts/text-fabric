@@ -415,16 +415,17 @@
 						<textarea id="aiPrompt" class="ai-prompt"
 							placeholder="Example: Search for all the times the verb which means to give has the preposition Lamed right after it on the next word."
 							rows="3"></textarea>
-						<div class="ai-controls">
-							<input type="password" id="apiKey" class="api-key" placeholder="Gemini API Key"
-								title="Your Google Gemini API key (saved in browser)" />
-							<button type="button" id="clearApiKey" class="small"
-								title="Clear saved API key from browser">Clear Key</button>
-							<button type="button" id="generateQuery" class="medium active"
-								title="Generate Text-Fabric query from natural language">Generate Query</button>
-						</div>
-						<p class="ai-help">💾 Your API key is saved securely in your browser and auto-loads next time
-						</p>
+					<div class="ai-controls">
+						<input type="password" id="apiKey" class="api-key" placeholder="Gemini API Key"
+							title="Your Google Gemini API key (saved in browser)" />
+						<button type="button" id="clearApiKey" class="small"
+							title="Clear saved API key from browser">Clear Key</button>
+						<button type="button" id="generateQuery" class="medium active"
+							title="Generate Text-Fabric query from natural language">Generate Query</button>
+					</div>
+					<p class="ai-help">💾 Your API key is saved securely in your browser and auto-loads next time. 
+						<span id="apiKeyHelper" style="display: none;">🔑 <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Get a free Gemini API key here</a></span>
+					</p>
 						<div id="aiStatus" class="ai-status"></div>
 						<div id="aiExplanation" class="ai-explanation"></div>
 					</div>

@@ -1,73 +1,62 @@
-<img src="/tf/docs/images/tf-small.png" align="left"/>
+# Quick Start - Text-Fabric BHSA
 
-# Text-Fabric
+## What You Need
 
-[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/annotation/text-fabric/)](https://archive.softwareheritage.org/browse/origin/https://github.com/annotation/text-fabric/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1008899.svg)](https://doi.org/10.5281/zenodo.592193)
-[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/2592/badge)](https://bestpractices.coreinfrastructure.org/projects/2592)
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-<img src="https://camo.githubusercontent.com/efdbaf92d577bd214ee5f26020d668e470045bd66de29266d8e74f336bd57d05/68747470733a2f2f773369642e6f72672f72657365617263682d746563686e6f6c6f67792d72656164696e6573732d6c6576656c732f4c6576656c3950726f76656e2e737667" alt="Technology Readiness Level 9/9 - Proven - Technology complete and proven in practise by real users" data-canonical-src="https://w3id.org/research-technology-readiness-levels/Level9Proven.svg" style="max-width: 100%;">
+1. **Python 3.9+** (3.13 recommended)
+2. **Google Gemini API Key** (free): https://aistudio.google.com/
+3. **~2GB disk space** (for BHSA corpus)
 
----
+## Setup (5 minutes)
 
-> Everything about us, everything around us, everything we know and can know of
-> is composed ultimately of patterns of nothing;
-> that’s the bottom line, the final truth.
-> So where we find we have any control over those patterns,
-> why not make the most elegant ones, the most enjoyable and good ones,
-> in our own terms?
->
-> -- **Iain M. Banks**.
-[Consider Phlebas](https://read.amazon.com/kp/kshare?asin=B002TXZRQI&id=NpPGzf_HT5aADabyiDDSIQ&reshareId=RZ91SGMZJPWK9S1Y4EZX&reshareChannel=system):
-A Culture Novel (Culture series)
+```bash
+# 1. Clone and enter
+git clone https://github.com/annotation/text-fabric.git
+cd text-fabric
 
----
+# 2. Create virtual environment
+python3 -m venv textfabric-venv
 
-> ... of days that are no more,
-> but which run on like a warp
-> to which the future weaves its weft.
->
-> -- **Alastair McIntosh**.
-[Poacher's Pilgrimage](https://www.waterstones.com/book/poachers-pilgrimage/alastair-mcintosh/9781780278131):
-Introduction to a Gaelic evening prayer
+# 3. Activate and install dependencies
+source textfabric-venv/bin/activate
+pip install -e .
+pip install google-generativeai>=0.3.0 pandas>=1.3.0
+deactivate
 
----
+# 4. Run Text-Fabric (downloads BHSA corpus on first run, takes 5-10 min)
+textfabric-venv/bin/tf ETCBC/bhsa
+```
 
-A corpus of ancient texts and (linguistic) annotations represents a large body of knowledge.
-Text-Fabric makes that knowledge accessible to programmers and non-programmers.
+## Run (After Setup)
 
-Text-Fabric is machinery for processing such corpora as annotated graphs.
-It treats corpora and annotations as data, much like big tables, but without
-loosing the rich structure of text, such as embedding and multiple representations.
-It deals with text in a state where all markup is gone, but where the complete logical
-structure still sits in the data.
+```bash
+# From the text-fabric directory
+textfabric-venv/bin/tf ETCBC/bhsa
+```
 
-All about Text-Fabric is in the
-[docs](https://annotation.github.io/text-fabric/tf).
+Open: `http://localhost:14897`
 
-See also
-[text-fabric-factory](https://github.com/annotation/text-fabric-factory)
-for programs to convert other formats to TF.
+## What's Missing from Repo
 
-Want to contribute?
+- ❌ BHSA corpus data (auto-downloads on first `tf etcbc/bhsa`)
+- ❌ API keys (get free Gemini key)
+- ❌ English translation CSV (optional)
 
-Start with the [contribution notes](codestyle/contributing.md).
+## Test
 
-Found a vulnerability? Please read the [security note](SECURITY.md).
+1. **Search tab**: Query `word sp=verb` → Should work
+2. **AI Query tab**: "Find verbs in Genesis" → Needs API key
+3. **Options tab**: Check "English translation" → Needs CSV files (optional)
 
-# Author
+## Troubleshooting
 
-[Dirk Roorda](https://github.com/dirkroorda)
+| Problem | Solution |
+|---------|----------|
+| "No dataset" | Run `textfabric-venv/bin/tf ETCBC/bhsa` (not just `tf`) |
+| "API key required" | Get free key at https://aistudio.google.com/ and enter in browser |
+| Can't access remotely | Already binds to `0.0.0.0` - check firewall |
+| Corpus download fails | Check internet, try manual: `textfabric-venv/bin/python -c "from tf.app import use; use('etcbc/bhsa', checkout='clone')"` |
+| Missing pandas/google-generativeai | Activate venv and run: `source textfabric-venv/bin/activate && pip install pandas google-generativeai && deactivate` |
 
----
+## Full Guide
 
-**This repository is being archived continuously by the 
-[Software Heritage Archive](https://archive.softwareheritage.org).
-If you want to cite snippets of the code of this repository, the Software Archive
-offers an easy and elegant way to do so.
-As an example, here I quote the 
-[*stitching* algorithm](https://archive.softwareheritage.org/swh:1:cnt:6169c074089ddc8a0e048cb67e1fec57857ef54d;lines=3224-3270/),
-by means of which Text-Fabric Search collects the solutions of a
-[search template](https://annotation.github.io/text-fabric/tf/about/use.html).
-The quote refers directly to specific lines of code, deeply buried in
-a Python file within a particular version of Text-Fabric.**
+See `SETUP_GUIDE.md` for detailed instructions.

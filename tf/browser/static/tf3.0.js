@@ -417,8 +417,8 @@ const colorMap = () => {
       form.submit()
     })
   $(".clmap").change(() => {
-      storeForm()
-      form.submit()
+    storeForm()
+    form.submit()
   })
 }
 
@@ -438,8 +438,8 @@ const eColorMap = () => {
       form.submit()
     })
   $(".eclmap").change(() => {
-      storeForm()
-      form.submit()
+    storeForm()
+    form.submit()
   })
 }
 
@@ -932,6 +932,7 @@ $(window).on("load", () => {
   activateTables("sections", null)
   activateTables("tuples", null)
   activateTables("query", "pages")
+  activateTables("passage", "passages")
   cradios()
   colorMap()
   eColorMap()
@@ -939,4 +940,83 @@ $(window).on("load", () => {
   reactive()
   jobOptions()
   jobControls()
+  initAIQueryGenerator()
 })
+
+/* AI Query Generator
+ *
+ */
+
+const initAIQueryGenerator = () => {
+  const generateBtn = $("#generateQuery")
+  const aiPrompt = $("#aiPrompt")
+  const apiKey = $("#apiKey")
+  const aiStatus = $("#aiStatus")
+  const aiExplanation = $("#aiExplanation")
+  const queryTextarea = $("#query")
+
+  generateBtn.off("click").click(async e => {
+    e.preventDefault()
+
+    const prompt = aiPrompt.val().trim()
+    const key = apiKey.val().trim()
+
+    // Clear previous messages
+    aiStatus.html("")
+    aiExplanation.html("")
+
+    // Validation
+    if (!prompt) {
+      aiStatus.html('<span class="error">⚠️ Please enter a description of what you want to search for</span>')
+      return
+    }
+
+    if (!key) {
+      aiStatus.html('<span class="error">⚠️ Please enter your Gemini API key</span>')
+      return
+    }
+
+    // Show loading state
+    generateBtn.prop("disabled", true)
+    generateBtn.html('<span class="fa fa-spinner fa-spin"></span> Generating...')
+    aiStatus.html('<span class="info">🤖 Generating query...</span>')
+
+    try {
+      const response = await fetch("/ai/generate_query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          api_key: key
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || data.error) {
+        aiStatus.html(`<span class="error">❌ Error: ${data.error || 'Unknown error'}</span>`)
+        return
+      }
+
+      // Success! Insert the query
+      queryTextarea.val(data.query)
+      aiStatus.html('<span class="success">✅ Query generated successfully!</span>')
+
+      if (data.explanation) {
+        aiExplanation.html(`<span class="info">💡 ${data.explanation}</span>`)
+      }
+
+      // Store the form to persist the query
+      storeForm()
+
+    } catch (error) {
+      aiStatus.html(`<span class="error">❌ Network error: ${error.message}</span>`)
+    } finally {
+      // Reset button
+      generateBtn.prop("disabled", false)
+      generateBtn.html("Generate Query")
+    }
+  })
+}

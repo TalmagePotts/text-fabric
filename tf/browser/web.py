@@ -192,6 +192,57 @@ def factory(web):
     def serveDownloadJ():
         return serveDownload(web, True)
 
+    @app.route("/ai/generate_query", methods=["POST"])
+    def serveAIQuery():
+        """Generate Text-Fabric query from natural language using AI."""
+        from flask import request, jsonify
+        from .ai_query import generate_query
+        
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'query': '',
+                    'explanation': '',
+                    'lexemes_used': [],
+                    'error': 'No JSON data provided'
+                }), 400
+            
+            user_prompt = data.get('prompt', '').strip()
+            api_key = data.get('api_key', '').strip()
+            
+            if not user_prompt:
+                return jsonify({
+                    'query': '',
+                    'explanation': '',
+                    'lexemes_used': [],
+                    'error': 'Prompt is required'
+                }), 400
+            
+            if not api_key:
+                return jsonify({
+                    'query': '',
+                    'explanation': '',
+                    'lexemes_used': [],
+                    'error': 'API key is required'
+                }), 400
+            
+            # Generate the query
+            result = generate_query(user_prompt, api_key)
+            
+            if result.get('error'):
+                return jsonify(result), 400
+            
+            return jsonify(result), 200
+            
+        except Exception as e:
+            return jsonify({
+                'query': '',
+                'explanation': '',
+                'lexemes_used': [],
+                'error': f'Server error: {str(e)}'
+            }), 500
+
     @app.route("/", methods=["GET", "POST"])
     @app.route("/<path:anything>", methods=["GET", "POST"])
     def serveAllX(anything=None):

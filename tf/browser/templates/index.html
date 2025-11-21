@@ -441,23 +441,59 @@
 				<div id="tupleMessages" class="messages">
 				</div>
 
-				<hr>
+		
+		<hr>
 
-				<p class="ilab">
-					<button
-						id="queryGo" class="xl" type="button"
-						title="run query and get results"
-					><span class="fa fa-search"></span></button>
-					search pad
-				</p>
+		<!-- AI Query Generator Section -->
+		<details id="aiQueryGenerator" class="ai-generator">
+			<summary>
+				<span class="ilab">🤖 AI Query Generator</span>
+			</summary>
+			<div class="ai-content">
+				<p class="ai-help">Describe what you want to search for in natural language</p>
 				<textarea
-					id="query" class="query" name="query"
-					placeholder="{{defaultCondenseType}}"
-				>{{query}}</textarea>
-				<div id="setNames" class="setnames">
+					id="aiPrompt"
+					class="ai-prompt"
+					placeholder="Example: Search for all the times the verb which means to give has the preposition Lamed right after it on the next word."
+					rows="3"
+				></textarea>
+				<div class="ai-controls">
+					<input
+						type="password"
+						id="apiKey"
+						class="api-key"
+						placeholder="Gemini API Key"
+						title="Your Google Gemini API key (not stored)"
+					/>
+					<button
+						type="button"
+						id="generateQuery"
+						class="medium active"
+						title="Generate Text-Fabric query from natural language"
+					>Generate Query</button>
 				</div>
-				<div id="queryMessages" class="messages">
-				</div>
+				<div id="aiStatus" class="ai-status"></div>
+				<div id="aiExplanation" class="ai-explanation"></div>
+			</div>
+		</details>
+
+		<hr>
+
+		<p class="ilab">
+			<button
+				id="queryGo" class="xl" type="button"
+				title="run query and get results"
+			><span class="fa fa-search"></span></button>
+			search pad
+		</p>
+		<textarea
+			id="query" class="query" name="query"
+			placeholder="{{defaultCondenseType}}"
+		>{{query}}</textarea>
+		<div id="setNames" class="setnames">
+		</div>
+		<div id="queryMessages" class="messages">
+		</div>
 
         {{colorMapHtml|safe}}
 

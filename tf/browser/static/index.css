@@ -415,3 +415,120 @@ details.dtrow > summary > span {
 	padding: 0 10px;
 	border-right: 4px solid var(--fog-back);
 }
+
+/* AI QUERY GENERATOR */
+
+details.ai-generator {
+	border: 2px solid var(--blue-haze-back);
+	border-radius: 6px;
+	padding: 8px;
+	margin: 10px 6px;
+	background-color: var(--haze-back);
+}
+
+details.ai-generator summary {
+	cursor: pointer;
+	font-weight: bold;
+	padding: 4px;
+	user-select: none;
+}
+
+details.ai-generator summary:hover {
+	background-color: var(--blue-haze-back);
+	border-radius: 4px;
+}
+
+details.ai-generator[open] {
+	background-color: var(--light-back);
+}
+
+.ai-content {
+	padding: 10px 4px;
+}
+
+.ai-help {
+	font-size: small;
+	color: var(--fog-fore);
+	margin: 4px 0;
+	font-style: italic;
+}
+
+textarea.ai-prompt {
+	font-size: medium;
+	font-family: system-ui;
+	width: calc(100% - 20px);
+	min-height: 4rem;
+	margin: 6px 6px;
+	padding: 8px;
+	border: 2px solid var(--blue-haze-back);
+	border-radius: 4px;
+	background-color: var(--paper-back);
+	color: var(--paper-fore);
+	resize: vertical;
+}
+
+.ai-controls {
+	display: flex;
+	flex-flow: row nowrap;
+	justify-content: flex-start;
+	align-items: center;
+	gap: 10px;
+	margin: 10px 6px;
+}
+
+input.api-key {
+	flex: 1 1 auto;
+	font-size: medium;
+	font-family: monospace;
+	padding: 8px;
+	border: 2px solid var(--fog-rim);
+	border-radius: 4px;
+	min-width: 200px;
+}
+
+button#generateQuery {
+	flex: 0 0 auto;
+	font-size: medium;
+	padding: 8px 16px;
+	background-color: var(--blue-haze-back);
+	color: var(--dark-fore);
+	border: 2px solid var(--blue-haze-fore);
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: bold;
+}
+
+button#generateQuery:hover:not(:disabled) {
+	background-color: var(--marine-haze-back);
+}
+
+button#generateQuery:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.ai-status, .ai-explanation {
+	margin: 8px 6px;
+	padding: 8px;
+	border-radius: 4px;
+	font-size: small;
+}
+
+.ai-status .error {
+	color: #d32f2f;
+	font-weight: bold;
+}
+
+.ai-status .success {
+	color: #388e3c;
+	font-weight: bold;
+}
+
+.ai-status .info {
+	color: var(--blue-haze-fore);
+}
+
+.ai-explanation .info {
+	color: var(--fog-fore);
+	font-style: italic;
+}

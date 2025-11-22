@@ -1,0 +1,16 @@
+{
+  "total_bhsa_lexemes": 8091,
+  "total_matched": 8091,
+  "coverage": 100.0,
+  "by_method": {
+    "exact_match": 7282,
+    "manual_correction": 18,
+    "consonantal_match": 0,
+    "fuzzy_match": 791
+  },
+  "by_confidence": {
+    "high (\u22650.9)": 7300,
+    "medium (0.7-0.89)": 2,
+    "low (<0.7)": 789
+  }
+}

@@ -1,0 +1,499 @@
+{
+    "metadata": {
+        "title": "Strong's Concordance to BHSA Lexeme Mapping Specification",
+        "version": "1.0",
+        "date": "2025-11-21",
+        "description": "Mapping specification between OpenScriptures Strong's Hebrew Concordance and BHSA (Biblia Hebraica Stuttgartensia Amstelodamensis) lexemes via Text-Fabric"
+    },
+    "strongs_schema": {
+        "source": "OpenScriptures Strong's Hebrew Dictionary",
+        "repository": "/home/teapot/code/text-fabric/strongs",
+        "formats": {
+            "json": {
+                "file": "hebrew/strongs-hebrew-dictionary.js",
+                "structure": "JavaScript object with Strong's numbers as keys (H1-H8674)",
+                "encoding": "UTF-8",
+                "fields": {
+                    "lemma": {
+                        "description": "Hebrew word in Unicode Hebrew script",
+                        "example": "אָב",
+                        "type": "string",
+                        "encoding": "UTF-8 Hebrew with vowel points (niqqud)"
+                    },
+                    "xlit": {
+                        "description": "Transliteration using Unicode combining characters",
+                        "example": "ʼâb",
+                        "type": "string",
+                        "encoding": "UTF-8 with diacritics"
+                    },
+                    "pron": {
+                        "description": "Pronunciation guide",
+                        "example": "awb",
+                        "type": "string"
+                    },
+                    "derivation": {
+                        "description": "Etymology and word derivation",
+                        "example": "a primitive word;",
+                        "type": "string",
+                        "contains_references": true,
+                        "reference_format": "H<number> (<lemma>)"
+                    },
+                    "strongs_def": {
+                        "description": "Strong's definition of the word",
+                        "example": "father, in a literal and immediate, or figurative and remote application",
+                        "type": "string"
+                    },
+                    "kjv_def": {
+                        "description": "King James Version glosses/translations",
+                        "example": "chief, (fore-) father(-less), [idiom] patrimony, principal",
+                        "type": "string",
+                        "separator": ", "
+                    }
+                }
+            },
+            "xml": {
+                "file": "hebrew/StrongHebrewG.xml",
+                "structure": "OSIS XML format with entry elements",
+                "encoding": "UTF-8",
+                "root_element": "osis/osisText/div[@type='glossary']/div[@type='entry']",
+                "fields": {
+                    "ID": {
+                        "description": "Strong's number",
+                        "attribute": "w/@ID",
+                        "example": "H1",
+                        "format": "H followed by 1-4 digits"
+                    },
+                    "lemma": {
+                        "description": "Hebrew lemma",
+                        "attribute": "w/@lemma",
+                        "example": "אָב"
+                    },
+                    "xlit": {
+                        "description": "Transliteration",
+                        "attribute": "w/@xlit",
+                        "example": "ʼâb"
+                    },
+                    "POS": {
+                        "description": "Pronunciation",
+                        "attribute": "w/@POS",
+                        "example": "awb"
+                    },
+                    "morph": {
+                        "description": "Morphological tag",
+                        "attribute": "w/@morph",
+                        "example": "n-m"
+                    },
+                    "gloss": {
+                        "description": "TWOT gloss reference",
+                        "attribute": "w/@gloss",
+                        "example": "4a"
+                    },
+                    "xml:lang": {
+                        "description": "Language code",
+                        "attribute": "w/@xml:lang",
+                        "values": [
+                            "heb",
+                            "arc",
+                            "x-pn"
+                        ],
+                        "note": "heb=Hebrew, arc=Aramaic, x-pn=proper name"
+                    }
+                }
+            },
+            "dat": {
+                "file": "hebrew/strongshebrew.dat",
+                "structure": "Plain text with entry markers",
+                "encoding": "ASCII/UTF-8",
+                "entry_delimiter": "$$T<7-digit-number>",
+                "fields": {
+                    "number": {
+                        "description": "Strong's number with leading zeros",
+                        "format": "\\<5-digit-number>\\",
+                        "example": "\\00001\\"
+                    },
+                    "lemma": {
+                        "description": "Transliterated lemma",
+                        "example": "'ab"
+                    },
+                    "pronunciation": {
+                        "description": "Pronunciation",
+                        "example": "awb"
+                    },
+                    "definition": {
+                        "description": "Full definition text",
+                        "multiline": true
+                    },
+                    "cross_references": {
+                        "description": "References to other Strong's numbers",
+                        "format": "see HEBREW for <number>"
+                    }
+                }
+            }
+        },
+        "coverage": {
+            "total_entries": 8674,
+            "range": "H1 to H8674",
+            "languages": [
+                "Hebrew",
+                "Aramaic"
+            ],
+            "proper_names": true
+        },
+        "hebrew_representation": {
+            "script": "Hebrew Unicode (U+0590 to U+05FF)",
+            "vocalization": "Full niqqud (vowel points) included",
+            "final_forms": "Uses final letter forms (ך, ם, ן, ף, ץ)",
+            "special_characters": [
+                "Dagesh (U+05BC)",
+                "Sin/Shin dot (U+05C1, U+05C2)",
+                "Qamets (U+05B8)",
+                "Patach (U+05B7)",
+                "Segol (U+05B6)"
+            ]
+        }
+    },
+    "bhsa_schema": {
+        "source": "BHSA (Biblia Hebraica Stuttgartensia Amstelodamensis)",
+        "access_method": "Text-Fabric Python API",
+        "repository": "etcbc/bhsa",
+        "note": "BHSA data requires Text-Fabric installation with dependencies (pyyaml)",
+        "node_type": "lex",
+        "key_features": {
+            "lex_utf8": {
+                "description": "Lexeme in UTF-8 Hebrew without vocalization",
+                "example": "אב",
+                "encoding": "UTF-8 consonantal Hebrew (no niqqud)",
+                "type": "string"
+            },
+            "voc_lex_utf8": {
+                "description": "Vocalized lexeme in UTF-8",
+                "example": "אָב",
+                "encoding": "UTF-8 with vowel points",
+                "type": "string",
+                "note": "Most similar to Strong's lemma field"
+            },
+            "language": {
+                "description": "Language of the lexeme",
+                "values": [
+                    "Hebrew",
+                    "Aramaic"
+                ],
+                "type": "string"
+            },
+            "sp": {
+                "description": "Part of speech",
+                "type": "string",
+                "values": [
+                    "verb",
+                    "subs",
+                    "nmpr",
+                    "adjv",
+                    "advb",
+                    "prep",
+                    "conj",
+                    "prps",
+                    "prde",
+                    "prin",
+                    "inrg",
+                    "nega",
+                    "intr",
+                    "art"
+                ]
+            },
+            "ls": {
+                "description": "Lexical set identifier",
+                "type": "string"
+            },
+            "gloss": {
+                "description": "English gloss",
+                "type": "string"
+            }
+        },
+        "hebrew_representation": {
+            "script": "Hebrew Unicode",
+            "vocalization": "Tiberian vocalization system",
+            "normalization": "ETCBC transcription conventions",
+            "consonantal_form": "Available via lex_utf8",
+            "vocalized_form": "Available via voc_lex_utf8"
+        }
+    },
+    "normalization_rules": [
+        {
+            "rule_id": "NR001",
+            "category": "vocalization",
+            "description": "Remove all vowel points for consonantal comparison",
+            "rationale": "Strong's and BHSA may use different vocalization systems",
+            "implementation": "Strip Unicode combining characters in range U+05B0-U+05BD, U+05BF-U+05C2, U+05C4-U+05C5, U+05C7",
+            "example": {
+                "strongs": "אָב",
+                "normalized": "אב",
+                "bhsa": "אב"
+            }
+        },
+        {
+            "rule_id": "NR002",
+            "category": "final_forms",
+            "description": "Normalize final letter forms to regular forms",
+            "rationale": "Ensure consistent matching regardless of word position",
+            "mappings": {
+                "ך": "כ",
+                "ם": "מ",
+                "ן": "נ",
+                "ף": "פ",
+                "ץ": "צ"
+            },
+            "example": {
+                "before": "מלך",
+                "after": "מלכ"
+            }
+        },
+        {
+            "rule_id": "NR003",
+            "category": "spelling_variants",
+            "description": "Handle plene vs. defective spelling",
+            "rationale": "Biblical Hebrew has spelling variations (with/without matres lectionis)",
+            "note": "May require manual mapping or fuzzy matching",
+            "examples": [
+                {
+                    "plene": "דָּוִיד",
+                    "defective": "דָּוִד"
+                },
+                {
+                    "plene": "יְרוּשָׁלַיִם",
+                    "defective": "יְרוּשָׁלִַם"
+                }
+            ]
+        },
+        {
+            "rule_id": "NR004",
+            "category": "diacritics",
+            "description": "Normalize dagesh and other diacritical marks",
+            "rationale": "Different sources may include/exclude dagesh",
+            "implementation": "Optionally strip dagesh (U+05BC) for broader matching",
+            "note": "Dagesh can be phonologically significant"
+        },
+        {
+            "rule_id": "NR005",
+            "category": "proper_names",
+            "description": "Handle proper names separately",
+            "rationale": "Proper names may have unique spellings and may not appear in BHSA lexeme list",
+            "implementation": "Filter Strong's entries with xml:lang='x-pn' or morph='n-pr-*'",
+            "note": "BHSA has separate node type for proper names"
+        },
+        {
+            "rule_id": "NR006",
+            "category": "aramaic",
+            "description": "Separate Aramaic entries",
+            "rationale": "Aramaic has different orthography and lexicon",
+            "implementation": "Use language feature in BHSA and xml:lang='arc' in Strong's",
+            "note": "Aramaic appears in Daniel, Ezra, and one verse in Jeremiah"
+        }
+    ],
+    "sample_mappings": [
+        {
+            "example_id": 1,
+            "strongs_number": "H1",
+            "strongs_data": {
+                "lemma": "אָב",
+                "xlit": "ʼâb",
+                "pron": "awb",
+                "kjv_def": "chief, (fore-) father(-less), [idiom] patrimony, principal",
+                "strongs_def": "father, in a literal and immediate, or figurative and remote application"
+            },
+            "bhsa_match": {
+                "lex_utf8": "אב",
+                "voc_lex_utf8": "אָב",
+                "language": "Hebrew",
+                "sp": "subs",
+                "gloss": "father"
+            },
+            "match_confidence": "high",
+            "match_method": "exact_vocalized",
+            "notes": "Perfect match on vocalized form"
+        },
+        {
+            "example_id": 2,
+            "strongs_number": "H6",
+            "strongs_data": {
+                "lemma": "אָבַד",
+                "xlit": "ʼâbad",
+                "pron": "aw-bad'",
+                "kjv_def": "break, destroy(-uction), + not escape, fail, lose",
+                "strongs_def": "properly, to wander away, i.e. lose oneself; by implication to perish (causative, destroy)"
+            },
+            "bhsa_match": {
+                "lex_utf8": "אבד",
+                "voc_lex_utf8": "אָבַד",
+                "language": "Hebrew",
+                "sp": "verb",
+                "gloss": "perish"
+            },
+            "match_confidence": "high",
+            "match_method": "exact_vocalized",
+            "notes": "Verb root with multiple derived forms"
+        },
+        {
+            "example_id": 3,
+            "strongs_number": "H2",
+            "strongs_data": {
+                "lemma": "אַב",
+                "xlit": "ʼab",
+                "pron": "ab",
+                "kjv_def": "father",
+                "strongs_def": "{father}",
+                "language": "Aramaic"
+            },
+            "bhsa_match": {
+                "lex_utf8": "אב",
+                "voc_lex_utf8": "אַב",
+                "language": "Aramaic",
+                "sp": "subs",
+                "gloss": "father"
+            },
+            "match_confidence": "high",
+            "match_method": "exact_vocalized_aramaic",
+            "notes": "Aramaic cognate of H1"
+        },
+        {
+            "example_id": 4,
+            "strongs_number": "H85",
+            "strongs_data": {
+                "lemma": "אַבְרָהָם",
+                "xlit": "ʼAbrâhâm",
+                "pron": "ab-raw-hawm'",
+                "kjv_def": "Abraham",
+                "strongs_def": "Abraham, the later name of Abram",
+                "type": "proper_name"
+            },
+            "bhsa_match": null,
+            "match_confidence": "none",
+            "match_method": "proper_name_excluded",
+            "notes": "Proper names typically not in BHSA lexeme list; found in word nodes instead"
+        },
+        {
+            "example_id": 5,
+            "strongs_number": "H3068",
+            "strongs_data": {
+                "lemma": "יְהֹוָה",
+                "xlit": "Yᵉhôvâh",
+                "pron": "yeh-ho-vaw'",
+                "kjv_def": "Jehovah, Jewish national name of God",
+                "strongs_def": "the self-Existent or Eternal; Jehovah"
+            },
+            "bhsa_match": {
+                "lex_utf8": "יהוה",
+                "voc_lex_utf8": "יְהוָה",
+                "language": "Hebrew",
+                "sp": "nmpr",
+                "gloss": "YHWH"
+            },
+            "match_confidence": "medium",
+            "match_method": "consonantal_match",
+            "notes": "Vocalization differs (Masoretic tradition vs. Strong's); BHSA uses scholarly vocalization"
+        }
+    ],
+    "edge_cases": {
+        "no_strongs_match": {
+            "description": "BHSA lexemes without corresponding Strong's number",
+            "causes": [
+                "BHSA may have more granular lexeme distinctions",
+                "Rare words not in Strong's",
+                "Different lemmatization approaches"
+            ],
+            "estimated_percentage": "5-10%",
+            "handling": "Create supplementary mapping table"
+        },
+        "one_to_many_strongs": {
+            "description": "Single Strong's number mapping to multiple BHSA lexemes",
+            "causes": [
+                "Strong's combines homographs",
+                "BHSA distinguishes by etymology or meaning"
+            ],
+            "example": {
+                "strongs": "H5921 (עַל)",
+                "bhsa_lexemes": [
+                    "עַל (preposition)",
+                    "עַל (noun)"
+                ]
+            },
+            "estimated_percentage": "15-20%",
+            "handling": "Use part-of-speech and context for disambiguation"
+        },
+        "one_to_many_bhsa": {
+            "description": "Single BHSA lexeme corresponding to multiple Strong's numbers",
+            "causes": [
+                "Strong's distinguishes spelling variants",
+                "Strong's separates related forms"
+            ],
+            "estimated_percentage": "10-15%",
+            "handling": "Map to primary Strong's number with alternates listed"
+        },
+        "missing_data": {
+            "description": "Incomplete entries in either source",
+            "causes": [
+                "Proper names in Strong's",
+                "Hapax legomena",
+                "Textual variants"
+            ],
+            "handling": "Flag for manual review"
+        },
+        "vocalization_conflicts": {
+            "description": "Same consonantal text with different vocalizations",
+            "causes": [
+                "Masoretic tradition variations",
+                "Qere/Ketiv readings",
+                "Different grammatical forms"
+            ],
+            "example": {
+                "consonantal": "מלך",
+                "strongs_options": [
+                    "מֶלֶךְ (king)",
+                    "מָלַךְ (to reign)"
+                ],
+                "bhsa_options": [
+                    "מֶלֶךְ (noun)",
+                    "מָלַךְ (verb)"
+                ]
+            },
+            "handling": "Require part-of-speech matching"
+        }
+    },
+    "implementation_notes": {
+        "matching_algorithm": {
+            "step1": "Normalize both sources to consonantal form (apply NR001, NR002)",
+            "step2": "Exact match on consonantal Hebrew",
+            "step3": "For matches, compare vocalized forms",
+            "step4": "Validate with part-of-speech if available",
+            "step5": "For ambiguous cases, use KJV gloss vs. BHSA gloss similarity"
+        },
+        "data_extraction": {
+            "strongs": "Parse JSON file for programmatic access; XML for detailed metadata",
+            "bhsa": "Requires Text-Fabric API: from tf.app import use; A = use('etcbc/bhsa')",
+            "note": "BHSA requires pyyaml dependency installation"
+        },
+        "output_format": {
+            "suggested": "CSV or JSON mapping table",
+            "fields": [
+                "strongs_number",
+                "strongs_lemma",
+                "strongs_xlit",
+                "bhsa_lex_utf8",
+                "bhsa_voc_lex_utf8",
+                "match_confidence",
+                "match_method",
+                "notes"
+            ]
+        },
+        "validation": {
+            "manual_review_threshold": "Confidence < 0.8",
+            "sample_size": "Review 100 random mappings",
+            "cross_reference": "Compare with existing Strong's-to-Hebrew lexicon mappings"
+        }
+    },
+    "references": {
+        "strongs_source": "https://github.com/openscriptures/strongs",
+        "bhsa_source": "https://github.com/ETCBC/bhsa",
+        "text_fabric": "https://annotation.github.io/text-fabric/",
+        "unicode_hebrew": "https://unicode.org/charts/PDF/U0590.pdf"
+    }
+}

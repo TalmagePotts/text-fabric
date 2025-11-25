@@ -74,8 +74,16 @@ def search_lexemes(term: str, max_results: int = 10) -> List[Dict[str, str]]:
 
 
 def build_system_prompt() -> str:
-    """Build the comprehensive system prompt for the AI."""
-    return """You are a Text-Fabric query generator for biblical Hebrew (BHSA corpus). Convert natural language to Text-Fabric search syntax.
+    """Build the comprehensive system prompt from production template file."""
+    template_path = Path(__file__).parent / "ai_prompt_template_production.md"
+    
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            template = f.read()
+        return template
+    except FileNotFoundError:
+        # Fallback to minimal prompt if template file not found
+        return """You are a Text-Fabric query generator for biblical Hebrew (BHSA corpus). Convert natural language to Text-Fabric search syntax.
 
 ## CRITICAL RULES
 1. Use EXACT lexeme spelling from database (case-sensitive)
@@ -89,76 +97,33 @@ def build_system_prompt() -> str:
 ❌ word lex=give → ✅ word lex=NTN[
 ❌ phrase typ=Pred → ✅ phrase function=Pred
 
-## KEY FEATURES
-- sp: verb, subs, nmpr, adjv, advb, prep, conj, intj, art, prps, prde, prin, inrg, nega
-- lex: exact from database (e.g. NTN[, JHWH/, BR>[, >T, >CR)
-- gn: m, f | nu: sg, pl, du | ps: p1, p2, p3
-- st: a, c, e | vs: qal, nif, piel, pual, hif, hof, hith
-- vt: perf, impf, wayq, coh, impv, infc, infa
-
-## OPERATORS
-< before | > after | :> immediately after | <: immediately before
-
-## EXAMPLES
-
-Find all verbs:
-word sp=verb
-
-Find YHWH:
-word lex=JHWH/
-
-Plural feminine nouns:
-word sp=subs gn=f nu=pl
-
-Verb "give" in qal:
-word lex=NTN[ vs=qal
-
-Verb followed by noun (same clause):
-clause
-  v:word sp=verb
-  n:word sp=subs
-  v < n
-
-Verb immediately before noun:
-sentence
-  v:word sp=verb
-  n:word sp=subs
-  v :> n
-
-Verb "give" with preposition "to" after:
-clause
-  w:word lex=NTN[
-  l:word lex=L
-  l :> w
-
-Dependent clauses starting with "asher":
-clause
-  word lex=>CR
-
 ## OUTPUT FORMAT - CRITICAL
 RESPOND WITH ONLY THE QUERY CODE. NO EXPLANATIONS. NO COMMENTARY. NO MARKDOWN.
 Just the query itself. Keep it SHORT and SIMPLE.
 Start your response immediately with the query."""
 
 
-def build_user_prompt(user_input: str, lexemes: List[Dict[str, str]]) -> str:
-    """Build the user prompt with injected lexeme context."""
-    prompt_parts = []
-    
-    # Add lexeme database context if we found matches
+
+def build_user_prompt(user_input: str, lexemes: List[Dict[str, str]], system_prompt: str) -> str:
+    """Build the complete prompt by inserting lexemes and user input into template."""
+    # Format lexeme database section
+    lexeme_section = ""
     if lexemes:
-        prompt_parts.append("## RELEVANT LEXEMES FROM DATABASE\n")
+        lexeme_lines = []
         for lex in lexemes:
-            prompt_parts.append(
+            lexeme_lines.append(
                 f"- {lex['gloss']}: lex={lex['lex']} (sp={lex['sp']})"
             )
-        prompt_parts.append("\n")
+        lexeme_section = "\n".join(lexeme_lines)
+    else:
+        lexeme_section = "(No relevant lexemes found in database)"
     
-    # Add user request
-    prompt_parts.append("## USER REQUEST\n")
-    prompt_parts.append(user_input)
+    # Replace placeholders in system prompt
+    complete_prompt = system_prompt.replace("{LEXEMES_PLACEHOLDER}", lexeme_section)
+    complete_prompt = complete_prompt.replace("{USER_PROMPT}", user_input)
     
-    return "\n".join(prompt_parts)
+    return complete_prompt
+
 
 
 def extract_keywords(user_input: str) -> List[str]:
@@ -290,10 +255,8 @@ def generate_query(user_prompt: str, api_key: str) -> Dict[str, any]:
         
         # Build prompts
         system_prompt = build_system_prompt()
-        user_prompt_with_context = build_user_prompt(user_prompt, unique_lexemes)
-        
-        # Combine system and user prompts
-        full_prompt = f"{system_prompt}\n\n{user_prompt_with_context}"
+        full_prompt = build_user_prompt(user_prompt, unique_lexemes, system_prompt)
+
         
         # Generate query with low temperature for consistency
         try:

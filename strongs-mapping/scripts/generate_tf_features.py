@@ -47,8 +47,8 @@ def create_feature_dicts(strongs_mapping, min_score=0.9):
     """
     print(f"\nCreating feature dictionaries (min_score={min_score})...")
     
-    strongs_dict = {}
-    glosses_dict = {}
+    # First pass: collect all Strong's numbers and glosses per node
+    node_data = {}  # node -> list of (strongs_num, glosses)
     
     total_matches = 0
     high_conf_matches = 0
@@ -58,19 +58,48 @@ def create_feature_dicts(strongs_mapping, min_score=0.9):
             if match['score'] >= min_score:
                 node = match['node']
                 
-                # strongs feature: just the Strong's number
-                strongs_dict[node] = strongs_num
+                if node not in node_data:
+                    node_data[node] = []
                 
-                # strongs_glosses feature: comma-separated KJV glosses
-                glosses_dict[node] = entry['kjv_glosses']
+                node_data[node].append({
+                    'strongs': strongs_num,
+                    'glosses': entry['kjv_glosses']
+                })
                 
                 high_conf_matches += 1
             
             total_matches += 1
     
+    # Second pass: combine data for nodes with multiple Strong's numbers
+    strongs_dict = {}
+    glosses_dict = {}
+    multi_strongs_count = 0
+    
+    for node, entries in node_data.items():
+        if len(entries) == 1:
+            # Single Strong's number for this node
+            strongs_dict[node] = entries[0]['strongs']
+            glosses_dict[node] = entries[0]['glosses']
+        else:
+            # Multiple Strong's numbers - combine them
+            multi_strongs_count += 1
+            # Use the first Strong's number (or could use semicolon-separated list)
+            strongs_dict[node] = entries[0]['strongs']
+            
+            # Combine all unique glosses
+            all_glosses = set()
+            for entry in entries:
+                # Split glosses and add to set
+                glosses = [g.strip() for g in entry['glosses'].split(',')]
+                all_glosses.update(glosses)
+            
+            # Sort and join
+            glosses_dict[node] = ','.join(sorted(all_glosses))
+    
     print(f"✓ Created features for {len(strongs_dict)} lexeme nodes")
     print(f"  Total matches: {total_matches}")
     print(f"  High confidence (≥{min_score}): {high_conf_matches}")
+    print(f"  Nodes with multiple Strong's numbers: {multi_strongs_count}")
     print(f"  Coverage: {100*high_conf_matches/total_matches:.1f}%")
     
     return strongs_dict, glosses_dict

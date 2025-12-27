@@ -266,7 +266,7 @@ def generate_query(user_prompt: str, api_key: str) -> Dict[str, any]:
                     temperature=0.1,
                     top_p=0.95,
                     top_k=40,
-                    max_output_tokens=2048,  # Increased from 1024 to handle longer queries
+                    max_output_tokens=4096,  # Increased to handle complex queries
                 ),
                 safety_settings=[
                     {

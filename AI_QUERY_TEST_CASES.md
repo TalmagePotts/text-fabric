@@ -201,7 +201,7 @@ clause /without/
 
 ---
 
-## Test Case 6: Ultra-Complex Research Query
+## Test Case 6: Ultra-Complex Research Query (CORRECTED)
 
 ### Natural Language Prompt:
 
@@ -219,28 +219,35 @@ book book=Jesaia
     /where/
       word sp=nmpr
     /have/
-      .. sp=nmpr
+      word sp=nmpr
     /-/
     phrase function=Time
     /without/
       word lex=JWM
     /-/
-    /without/
-      c2:clause typ=WayX
-      c1 :> c2
-    /-/
+  /without/
+    c2:clause typ=WayX
+    c1 :> c2
+  /-/
 ```
 
 ### What This Tests:
-- ✅ Lexeme lookup: "come" → `BW>` (bet-vav-aleph)
-- ✅ Lexeme lookup: "day" → `JWM` (yod-vav-mem)
-- ✅ Book name: "Isaiah" → `Jesaia`
+- ✅ Lexeme lookup: "come" → `BW>` (NO `[` marker!)
+- ✅ Lexeme lookup: "day" → `JWM` (NO `/` marker!)
+- ✅ Book name: "Isaiah" → `Jesaia` (Latin form, NOT "Isaiah")
 - ✅ Clause type: `typ=WayX` (wayyiqtol clause)
-- ✅ Multiple quantifiers on same atom
-- ✅ Nested `/where/`+`/have/` with parent reference
+- ✅ Multiple quantifiers on same clause
+- ✅ Nested `/where/`+`/have/` 
 - ✅ Multiple `/without/` quantifiers
 - ✅ Adjacency check: `:>` between clauses
 - ✅ Named nodes for clause comparison
+
+### Common Errors to Avoid:
+- ❌ `word lex=BW>[` - WRONG! No `[` marker
+- ❌ `word lex=JWM/` - WRONG! No `/` marker
+- ❌ `book book=Isaiah` - WRONG! Use `Jesaia`
+- ❌ Quantifiers outside clause containment
+- ❌ Incorrect indentation breaking containment hierarchy
 
 ---
 

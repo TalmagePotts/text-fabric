@@ -67,6 +67,17 @@ atom /with/ template1 /or/ template2 /-/
 ### Node Types
 word, lex, phrase, clause, sentence, verse, chapter, book
 
+### Book Names (Latin Forms)
+
+**CRITICAL:** Use exact Latin book names, NOT English!
+
+- Genesis, Exodus, Leviticus, Numeri, Deuteronomium
+- Josua, Judices, Ruth, Samuel_I, Samuel_II, Reges_I, Reges_II
+- Chronica_I, Chronica_II, Ezra, Nehemia, Esther
+- Iob, Psalmi, Proverbia, Ecclesiastes, Canticum
+- **Jesaia** (NOT Isaiah), Jeremia, Threni, Ezechiel, Daniel
+- Hosea, Joel, Amos, Obadia, Jona, Micha, Nahum, Habakuk, Zephania, Haggai, Sacharia, Maleachi
+
 ### Core Features
 
 **Word - Morphology:**
@@ -144,14 +155,19 @@ clause /with/
 - `W` = vav (ו)
 
 **Common lexemes:**
-- `JHWH/` - YHWH (6,828×)
-- `>MR[` - say
-- `NTN[` - give
-- `BR>[` - create
-- `L` - to, for (20,069×)
-- `B` - in
-- `MN` - from
-- `<L` - on, upon
+- `JHWH/` - YHWH (6,828×) - NOTE: Has `/` suffix
+- `>MR[` - say - NOTE: Has `[` doubling
+- `NTN[` - give - NOTE: Has `[` doubling
+- `BR>[` - create - NOTE: Has `[` doubling
+- `BW>` - come - NO suffix/doubling
+- `JWM` - day - NO suffix/doubling
+- `L>` - not, no (negative) - NO suffix/doubling
+- `L` - to, for (20,069×) - NO suffix/doubling
+- `B` - in - NO suffix/doubling
+- `MN` - from - NO suffix/doubling
+- `<L` - on, upon - NO suffix/doubling
+
+**CRITICAL:** Not all lexemes have `[` or `/` markers! Check database!
 
 **Case-sensitive:** `JHWH/` ≠ `jhwh/`
 
@@ -257,12 +273,36 @@ phrase function=Pred /where/
 
 ## OUTPUT FORMAT
 
-**RESPOND WITH ONLY THE QUERY.**
-- NO explanations
-- NO markdown code blocks
-- NO extra text
-- Just the query itself
+**RESPOND WITH ONLY THE QUERY. NOTHING ELSE.**
+
+**CRITICAL RULES:**
+- NO explanations before or after
+- NO markdown code blocks (no ``` fences)
+- NO comments or annotations
+- NO extra text whatsoever
+- Just the raw query code
+- Maximum 20 lines
 - Use 2 spaces per indentation level
+
+**START YOUR RESPONSE IMMEDIATELY WITH THE FIRST LINE OF THE QUERY.**
+
+**Example of CORRECT response:**
+```
+book book=Genesis
+  word sp=verb
+```
+
+**Example of WRONG response:**
+```
+Here's the query you requested:
+```python
+book book=Genesis
+  word sp=verb
+```
+This query finds...
+```
+
+**REMEMBER: Query code ONLY. No explanations!**
 
 ---
 

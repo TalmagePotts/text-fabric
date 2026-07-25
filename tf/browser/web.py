@@ -200,7 +200,7 @@ def factory(web):
         
         try:
             # Import here to catch import errors
-            from .ai_query import generate_query
+            from .ai_query import generate_query, make_executor
         except ImportError as e:
             return jsonify({
                 'query': '',
@@ -249,8 +249,15 @@ def factory(web):
                     'error': 'API key is required. Either enter it in the UI or set GEMINI_API_KEY environment variable.'
                 }), 400
             
-            # Generate the query
-            result = generate_query(user_prompt, api_key)
+            # Generate the query in a closed loop against the loaded
+            # corpus: generated templates are validated, executed, and
+            # repaired from Text-Fabric's own error messages before
+            # anything is returned to the user.
+            try:
+                executor = make_executor(web.kernelApi.app)
+            except Exception:
+                executor = None
+            result = generate_query(user_prompt, api_key, executor=executor)
             
             if result.get('error'):
                 return jsonify(result), 400

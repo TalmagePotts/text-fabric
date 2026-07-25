@@ -1,389 +1,408 @@
 """
-AI Query Generation Module for Text-Fabric BHSA Browser
+AI query generation for the Text-Fabric BHSA browser.
 
-This module provides AI-powered natural language to Text-Fabric query conversion
-using Google's Gemini API with comprehensive context including lexeme database,
-feature references, and validated examples.
+Natural language -> Text-Fabric search template, as a closed loop:
+
+1. Look up candidate lexemes for the content words of the request in the
+   corpus lexeme database (English gloss, ETCBC transliteration, or
+   Hebrew script) and inject them into the prompt.
+2. Ask the LLM for a search template.
+3. Validate the template deterministically against the corpus inventory
+   (`query_validator`), catching wrong feature values and lexemes that
+   Text-Fabric itself would silently accept with zero results.
+4. Execute the template against the live corpus.  Parse errors and
+   zero-result diagnoses are fed back to the LLM, which retries — up to
+   `MAX_ATTEMPTS` rounds.
+
+Providers: Google Gemini (API key from the UI or GEMINI_API_KEY) or
+Anthropic Claude (keys starting with `sk-ant`, or ANTHROPIC_API_KEY).
 """
 
 import os
 import re
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
-import pandas as pd
 
-try:
-    import google.generativeai as genai
-    GENAI_AVAILABLE = True
-except ImportError:
-    GENAI_AVAILABLE = False
+from .corpus_data import search_lexemes
+from .query_validator import validate_query
 
+MAX_ATTEMPTS = 4
+RESULT_CAP = 100000  # stop counting beyond this many results
+ZERO_PROBE_CAP = 8  # max relaxation probes when diagnosing zero results
 
-# Module-level cache for lexemes
-_LEXEMES_DF: Optional[pd.DataFrame] = None
-_MODULE_DIR = Path(__file__).parent.parent.parent  # Go up to text-fabric root
+GEMINI_MODEL = os.environ.get("AI_QUERY_GEMINI_MODEL", "gemini-2.5-pro")
+ANTHROPIC_MODEL = os.environ.get("AI_QUERY_ANTHROPIC_MODEL", "claude-sonnet-5")
 
+_TEMPLATE_CACHE = None
 
-def load_lexemes() -> pd.DataFrame:
-    """Load and cache the BHSA lexeme database."""
-    global _LEXEMES_DF
-    
-    if _LEXEMES_DF is not None:
-        return _LEXEMES_DF
-    
-    lexeme_path = _MODULE_DIR / "bhsa_lexemes.csv"
-    
-    if not lexeme_path.exists():
-        raise FileNotFoundError(f"Lexeme database not found at {lexeme_path}")
-    
-    _LEXEMES_DF = pd.read_csv(lexeme_path, encoding='utf-8')
-    return _LEXEMES_DF
-
-
-def search_lexemes(term: str, max_results: int = 10) -> List[Dict[str, str]]:
-    """
-    Search for lexemes by English gloss or Hebrew text.
-    
-    Args:
-        term: Search term (English word or Hebrew)
-        max_results: Maximum number of results to return
-        
-    Returns:
-        List of matching lexemes with lex, sp, gloss, and voc_lex
-    """
-    df = load_lexemes()
-    term_lower = term.lower().strip()
-    
-    # Search in gloss column (case-insensitive)
-    matches = df[df['gloss'].str.lower().str.contains(term_lower, na=False, regex=False)]
-    
-    # Limit results
-    matches = matches.head(max_results)
-    
-    # Convert to list of dicts
-    results = []
-    for _, row in matches.iterrows():
-        results.append({
-            'lex': str(row['lex']),
-            'sp': str(row['sp']),
-            'gloss': str(row['gloss']),
-            'voc_lex': str(row['voc_lex']) if pd.notna(row['voc_lex']) else ''
-        })
-    
-    return results
+STOPWORDS = set(
+    """a an and are as at be but by for from has have i in is it me my of on or
+    show showing that the their them then there these this those to want was we
+    were where which who whose will with you your all any each also only its
+    it's don't doesn't not no non containing contains contain occur occurs
+    occurrences instance instances example examples list find search query
+    queries
+    word words verb verbs noun nouns adjective adjectives preposition
+    prepositions particle particles pronoun pronouns suffix suffixes clause
+    clauses phrase phrases sentence sentences verse verses chapter chapters
+    book books lexeme lexemes form forms state stem stems tense person gender
+    number singular plural dual masculine feminine absolute construct perfect
+    imperfect imperative infinitive participle wayyiqtol qatal yiqtol qal
+    niphal nifal piel pual hiphil hifil hophal hofal hithpael hitpael subject
+    object predicate complement direct speech narrative followed immediately
+    before after between first second third same different every without
+    hebrew aramaic bible biblical""".split()
+)
 
 
-def build_system_prompt() -> str:
-    """Build the comprehensive system prompt from production template file."""
-    template_path = Path(__file__).parent / "ai_prompt_template_production.md"
-    
-    try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template = f.read()
-        return template
-    except FileNotFoundError:
-        # Fallback to minimal prompt if template file not found
-        return """You are a Text-Fabric query generator for biblical Hebrew (BHSA corpus). Convert natural language to Text-Fabric search syntax.
-
-## CRITICAL RULES
-1. Use EXACT lexeme spelling from database (case-sensitive)
-2. Feature names: sp, lex, gn, nu, ps, st, vs, vt, function, typ
-3. Indentation = containment (2 spaces per level)
-4. Part of speech: verb, subs, nmpr, adjv, advb, prep, conj, intj, art, prps, prde, prin, inrg, nega
-
-## COMMON ERRORS - AVOID THESE
-❌ word pos=verb → ✅ word sp=verb
-❌ word lex=YHWH → ✅ word lex=JHWH/
-❌ word lex=give → ✅ word lex=NTN[
-❌ phrase typ=Pred → ✅ phrase function=Pred
-
-## OUTPUT FORMAT - CRITICAL
-RESPOND WITH ONLY THE QUERY CODE. NO EXPLANATIONS. NO COMMENTARY. NO MARKDOWN.
-Just the query itself. Keep it SHORT and SIMPLE.
-Start your response immediately with the query."""
+# ----------------------------------------------------------------------------
+# prompt building
+# ----------------------------------------------------------------------------
 
 
-
-def build_user_prompt(user_input: str, lexemes: List[Dict[str, str]], system_prompt: str) -> str:
-    """Build the complete prompt by inserting lexemes and user input into template."""
-    # Format lexeme database section
-    lexeme_section = ""
-    if lexemes:
-        lexeme_lines = []
-        for lex in lexemes:
-            lexeme_lines.append(
-                f"- {lex['gloss']}: lex={lex['lex']} (sp={lex['sp']})"
-            )
-        lexeme_section = "\n".join(lexeme_lines)
-    else:
-        lexeme_section = "(No relevant lexemes found in database)"
-    
-    # Replace placeholders in system prompt
-    complete_prompt = system_prompt.replace("{LEXEMES_PLACEHOLDER}", lexeme_section)
-    complete_prompt = complete_prompt.replace("{USER_PROMPT}", user_input)
-    
-    return complete_prompt
+def build_system_prompt():
+    """Load the v3 production prompt template."""
+    global _TEMPLATE_CACHE
+    if _TEMPLATE_CACHE is None:
+        path = os.path.join(os.path.dirname(__file__), "ai_prompt_template_v3.md")
+        with open(path, encoding="utf-8") as fh:
+            _TEMPLATE_CACHE = fh.read()
+    return _TEMPLATE_CACHE
 
 
-
-def extract_keywords(user_input: str) -> List[str]:
-    """Extract potential Hebrew word references from user input."""
-    # Common words to search for
-    keywords = []
-    
-    # Extract quoted words
-    quoted = re.findall(r'"([^"]+)"', user_input)
-    keywords.extend(quoted)
-    
-    quoted_single = re.findall(r"'([^']+)'", user_input)
-    keywords.extend(quoted_single)
-    
-    # Common biblical terms
-    biblical_terms = [
-        'give', 'create', 'say', 'see', 'make', 'go', 'come', 'take',
-        'YHWH', 'God', 'lord', 'heaven', 'earth', 'man', 'woman',
-        'day', 'night', 'light', 'darkness', 'water', 'land',
-        'verb', 'noun', 'preposition', 'Lamed', 'to', 'in', 'from',
-        'asher', 'which', 'that', 'who'
-    ]
-    
-    user_lower = user_input.lower()
-    for term in biblical_terms:
-        if term.lower() in user_lower:
-            keywords.append(term)
-    
-    return list(set(keywords))  # Remove duplicates
+def extract_terms(user_input):
+    """Candidate content words to look up in the lexeme database."""
+    terms = []
+    terms.extend(re.findall(r'"([^"]+)"', user_input))
+    terms.extend(re.findall(r"'([^']+)'", user_input))
+    terms.extend(re.findall(r"[֐-תװ-״]+", user_input))
+    for word in re.findall(r"[A-Za-z][A-Za-z'-]+", user_input):
+        lowered = word.lower().strip("'-")
+        if len(lowered) >= 3 and lowered not in STOPWORDS:
+            terms.append(lowered)
+    seen = set()
+    unique = []
+    for t in terms:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    return unique
 
 
-def validate_query(query: str) -> Tuple[bool, Optional[str]]:
-    """
-    Validate the generated query for basic syntax correctness.
-    
-    Returns:
-        (is_valid, error_message)
-    """
-    lines = query.strip().split('\n')
-    
-    if not lines:
-        return False, "Query is empty"
-    
-    # Check for common syntax errors
-    for i, line in enumerate(lines, 1):
-        # Check indentation (must be even number of spaces)
-        leading_spaces = len(line) - len(line.lstrip(' '))
-        if leading_spaces % 2 != 0:
-            return False, f"Line {i}: Indentation must use multiples of 2 spaces"
-        
-        # Check for tabs
-        if '\t' in line:
-            return False, f"Line {i}: Use spaces, not tabs for indentation"
-        
-        # Check for common feature name errors
-        if 'pos=' in line:
-            return False, f"Line {i}: Use 'sp=' not 'pos=' for part of speech"
-        
-        if 'gender=' in line:
-            return False, f"Line {i}: Use 'gn=' not 'gender=' for gender"
-        
-        if 'number=' in line:
-            return False, f"Line {i}: Use 'nu=' not 'number=' for number"
-    
-    # Check first line is a valid node type
-    first_line = lines[0].strip()
-    valid_node_types = ['word', 'phrase', 'clause', 'sentence', 'verse', 'chapter', 'book']
-    
-    # Extract node type (may have name prefix like "w:word")
-    node_type = first_line.split()[0].split(':')[-1]
-    
-    if node_type not in valid_node_types:
-        return False, f"First line must start with a valid node type: {', '.join(valid_node_types)}"
-    
-    return True, None
-
-
-def generate_query(user_prompt: str, api_key: str) -> Dict[str, any]:
-    """
-    Generate a Text-Fabric query from natural language using Gemini API.
-    
-    Args:
-        user_prompt: Natural language description of desired query
-        api_key: Google Gemini API key
-        
-    Returns:
-        Dictionary with:
-        - query: Generated Text-Fabric query string
-        - explanation: Human-readable explanation
-        - lexemes_used: List of lexemes found and used
-        - error: Error message if generation failed
-    """
-    if not GENAI_AVAILABLE:
-        return {
-            'query': '',
-            'explanation': '',
-            'lexemes_used': [],
-            'error': 'google-generativeai package not installed. Install with: pip install google-generativeai'
-        }
-    
-    if not api_key:
-        return {
-            'query': '',
-            'explanation': '',
-            'lexemes_used': [],
-            'error': 'API key is required'
-        }
-    
-    try:
-        # Configure Gemini
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-pro')
-        
-        # Extract keywords and search for lexemes
-        keywords = extract_keywords(user_prompt)
-        all_lexemes = []
-        for keyword in keywords:
-            lexemes = search_lexemes(keyword, max_results=5)
-            all_lexemes.extend(lexemes)
-        
-        # Remove duplicates
-        seen = set()
-        unique_lexemes = []
-        for lex in all_lexemes:
-            key = lex['lex']
+def find_lexemes(user_input, per_term=4, cap=30):
+    """Look up lexeme candidates for the request; returns list of dicts."""
+    found = []
+    seen = set()
+    for term in extract_terms(user_input):
+        for entry in search_lexemes(term, max_results=per_term):
+            key = (entry["lex"], entry["lang"])
             if key not in seen:
                 seen.add(key)
-                unique_lexemes.append(lex)
-        
-        # Build prompts
-        system_prompt = build_system_prompt()
-        full_prompt = build_user_prompt(user_prompt, unique_lexemes, system_prompt)
+                found.append(entry)
+        if len(found) >= cap:
+            break
+    return found[:cap]
 
-        
-        # Generate query with low temperature for consistency
-        try:
-            response = model.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.1,
-                    top_p=0.95,
-                    top_k=40,
-                    max_output_tokens=4096,  # Increased to handle complex queries
-                ),
-                safety_settings=[
-                    {
-                        "category": "HARM_CATEGORY_HARASSMENT",
-                        "threshold": "BLOCK_NONE",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_HATE_SPEECH",
-                        "threshold": "BLOCK_NONE",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        "threshold": "BLOCK_NONE",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                        "threshold": "BLOCK_NONE",
-                    },
-                ]
+
+def format_lexemes(lexemes):
+    if not lexemes:
+        return (
+            "(No matching lexemes found — rely on `gloss` constraints "
+            "rather than guessing transliterations.)"
+        )
+    lines = []
+    for e in lexemes:
+        lang = f", {e['lang']}" if e["lang"] != "Hebrew" else ""
+        lines.append(
+            f"- {e['gloss']}: lex={e['lex']} ({e['sp']}, {e['freq']}×"
+            f"{lang}) {e['voc']}"
+        )
+    return "\n".join(lines)
+
+
+def build_prompt(user_input, lexemes, feedback_history):
+    prompt = build_system_prompt()
+    prompt = prompt.replace("{LEXEMES_PLACEHOLDER}", format_lexemes(lexemes))
+    prompt = prompt.replace("{USER_PROMPT}", user_input)
+    for attempt, feedback in feedback_history:
+        prompt += (
+            f"\n\n---\n\n## PREVIOUS ATTEMPT (rejected)\n\n"
+            f"```\n{attempt}\n```\n\n"
+            f"## FEEDBACK FROM THE CORPUS ENGINE\n\n{feedback}\n\n"
+            f"Produce a corrected template (template only, no commentary)."
+        )
+    return prompt
+
+
+# ----------------------------------------------------------------------------
+# LLM providers
+# ----------------------------------------------------------------------------
+
+
+def _call_gemini(prompt, api_key):
+    import google.generativeai as genai
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(GEMINI_MODEL)
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.types.GenerationConfig(
+            temperature=0.1, max_output_tokens=4096
+        ),
+        safety_settings=[
+            {"category": cat, "threshold": "BLOCK_NONE"}
+            for cat in (
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
             )
-        except Exception as api_error:
-            return {
-                'query': '',
-                'explanation': '',
-                'lexemes_used': [],
-                'error': f'API error: {str(api_error)}'
-            }
-        
-        # Check if response was blocked
-        if not response.candidates:
-            return {
-                'query': '',
-                'explanation': '',
-                'lexemes_used': [],
-                'error': 'Response was blocked by safety filters. Try rephrasing your query more simply.'
-            }
-        
-        candidate = response.candidates[0]
-        
-        # Check finish reason
-        if hasattr(candidate, 'finish_reason'):
-            finish_reason = candidate.finish_reason
-            # finish_reason: 1 = STOP (normal), 2 = MAX_TOKENS, 3 = SAFETY, 4 = RECITATION, 5 = OTHER
-            if finish_reason == 3:  # SAFETY
-                return {
-                    'query': '',
-                    'explanation': '',
-                    'lexemes_used': [],
-                    'error': 'Response blocked by safety filters. Try a simpler description.'
-                }
-            elif finish_reason == 2:  # MAX_TOKENS
-                return {
-                    'query': '',
-                    'explanation': '',
-                    'lexemes_used': [],
-                    'error': 'Response too long. Try breaking your query into smaller parts.'
-                }
-            elif finish_reason not in [1, None]:  # Not STOP or None
-                return {
-                    'query': '',
-                    'explanation': '',
-                    'lexemes_used': [],
-                    'error': f'Response generation failed (reason: {finish_reason}). Try rephrasing.'
-                }
-        
-        # Try to get the text
+        ],
+    )
+    if not response.candidates:
+        raise RuntimeError("Gemini returned no candidates (safety block?)")
+    finish = getattr(response.candidates[0], "finish_reason", 1)
+    if finish == 3:
+        raise RuntimeError("Gemini blocked the response (safety)")
+    return response.text
+
+
+def _call_anthropic(prompt, api_key):
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=4096,
+        temperature=0.1,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(
+        block.text for block in response.content if block.type == "text"
+    )
+
+
+def call_llm(prompt, api_key):
+    if api_key.startswith("sk-ant"):
+        return _call_anthropic(prompt, api_key)
+    return _call_gemini(prompt, api_key)
+
+
+def strip_fences(text):
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
+
+
+# ----------------------------------------------------------------------------
+# execution & zero-result diagnosis
+# ----------------------------------------------------------------------------
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(text):
+    return _TAG_RE.sub("", text or "").strip()
+
+
+def make_executor(app):
+    """
+    Build an executor closure over a loaded TF advanced app.
+
+    The executor takes (query, limit) and returns (count, ok, messages):
+    `ok` False means the template failed to parse/execute; `messages`
+    holds Text-Fabric's diagnostics as plain text.
+    """
+    S = app.api.S
+
+    def executor(query, limit=RESULT_CAP):
+        msgs = []
         try:
-            generated_query = response.text.strip()
-        except ValueError as e:
-            # response.text accessor failed
+            res = S.search(query, limit=limit, _msgCache=msgs)
+        except Exception as e:
+            return 0, False, f"Execution error: {e}"
+        if isinstance(res, tuple) and len(res) == 3:
+            results, status, messages = res
+        else:
+            results, status, messages = res, True, ""
+        try:
+            count = len(list(results))
+        except Exception as e:
+            return 0, False, f"Execution error: {e}"
+        return count, bool(status), _strip_html(str(messages or ""))
+
+    return executor
+
+
+def _feature_spec_tokens(line):
+    """(atomPrefix, [featureSpec tokens]) for an atom line, else (line, [])."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("%") or stripped.startswith("/"):
+        return line, []
+    tokens = re.split(r"(?<!\\)\s+", stripped)
+    specs = [
+        t
+        for t in tokens[1:]
+        if re.match(r"^[A-Za-z0-9_@]+[=#~<>]", t)
+    ]
+    return tokens[0], specs
+
+
+def diagnose_zero(query, executor):
+    """
+    Find which single constraints eliminate all results, by removing one
+    feature spec at a time and re-running with limit=1.
+    """
+    lines = query.split("\n")
+    culprits = []
+    probes = 0
+    for i, line in enumerate(lines):
+        _, specs = _feature_spec_tokens(line)
+        for spec in specs:
+            if probes >= ZERO_PROBE_CAP:
+                break
+            relaxed = list(lines)
+            newLine = line.replace(spec, "", 1).rstrip()
+            relaxed[i] = newLine
+            probes += 1
+            count, ok, _ = executor("\n".join(relaxed), limit=1)
+            if ok and count > 0:
+                culprits.append((i + 1, spec))
+    if not culprits:
+        return (
+            "The query is syntactically valid but returns 0 results, and no "
+            "single constraint is responsible (the combination as a whole "
+            "matches nothing). Reconsider the structure — e.g. containment "
+            "levels, word order operators, or whether the phenomenon is "
+            "expressed with different features."
+        )
+    listing = "\n".join(
+        f"- removing `{spec}` (line {ln}) makes the query match"
+        for ln, spec in culprits
+    )
+    return (
+        "The query is syntactically valid but returns 0 results. "
+        "Relaxation analysis of single constraints:\n"
+        f"{listing}\n"
+        "One of these constraints contradicts the rest (wrong value, wrong "
+        "node level, or a value that never co-occurs with the others). "
+        "Fix or drop the offending constraint."
+    )
+
+
+# ----------------------------------------------------------------------------
+# main pipeline
+# ----------------------------------------------------------------------------
+
+
+def generate_query(user_prompt, api_key, executor=None, max_attempts=MAX_ATTEMPTS):
+    """
+    Generate a Text-Fabric query from natural language.
+
+    Returns a dict with keys: query, explanation, lexemes_used, error,
+    result_count, attempts.  `error` is None on success.  When `executor`
+    is given (see `make_executor`), the returned query is guaranteed to
+    parse, and its result count is reported.
+    """
+    base = {
+        "query": "",
+        "explanation": "",
+        "lexemes_used": [],
+        "error": None,
+        "result_count": None,
+        "attempts": 0,
+    }
+    user_prompt = (user_prompt or "").strip()
+    api_key = (api_key or "").strip()
+    if not user_prompt:
+        return {**base, "error": "Prompt is required"}
+    if not api_key:
+        return {**base, "error": "API key is required"}
+
+    lexemes = find_lexemes(user_prompt)
+    base["lexemes_used"] = [e["lex"] for e in lexemes]
+
+    feedback_history = []
+    query = ""
+    zero_retry_used = False
+
+    for attempt in range(1, max_attempts + 1):
+        base["attempts"] = attempt
+        prompt = build_prompt(user_prompt, lexemes, feedback_history)
+        try:
+            query = strip_fences(call_llm(prompt, api_key))
+        except Exception as e:
+            return {**base, "error": f"AI provider error: {e}"}
+        if not query:
+            feedback_history.append(("(empty)", "Your response was empty."))
+            continue
+
+        ok, valErrors = validate_query(query)
+        if not ok:
+            feedback_history.append((query, f"Validation errors:\n{valErrors}"))
+            continue
+
+        if executor is None:
             return {
-                'query': '',
-                'explanation': '',
-                'lexemes_used': [],
-                'error': 'Could not extract query from response. The prompt may be too complex. Try simplifying.'
+                **base,
+                "query": query,
+                "explanation": _explanation(lexemes, None, attempt),
             }
-        
-        # Remove markdown code blocks if present
-        if generated_query.startswith('```'):
-            lines = generated_query.split('\n')
-            # Remove first and last lines if they're code fence markers
-            if lines[0].startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].startswith('```'):
-                lines = lines[:-1]
-            generated_query = '\n'.join(lines).strip()
-        
-        # Validate the query
-        is_valid, error_msg = validate_query(generated_query)
-        
-        if not is_valid:
-            return {
-                'query': generated_query,
-                'explanation': 'Query validation failed',
-                'lexemes_used': [lex['lex'] for lex in unique_lexemes],
-                'error': f'Validation error: {error_msg}'
-            }
-        
-        # Create explanation
-        explanation_parts = []
-        if unique_lexemes:
-            explanation_parts.append("Found lexemes: " + ", ".join(
-                f"{lex['gloss']} ({lex['lex']})" for lex in unique_lexemes[:3]
-            ))
-        explanation_parts.append("Query generated successfully")
-        
+
+        count, execOk, messages = executor(query)
+        if not execOk or messages:
+            feedback_history.append(
+                (query, f"Text-Fabric rejected the template:\n{messages}")
+            )
+            continue
+        if count == 0 and not zero_retry_used:
+            zero_retry_used = True
+            feedback_history.append((query, diagnose_zero(query, executor)))
+            continue
         return {
-            'query': generated_query,
-            'explanation': '. '.join(explanation_parts),
-            'lexemes_used': [lex['lex'] for lex in unique_lexemes],
-            'error': None
+            **base,
+            "query": query,
+            "result_count": count,
+            "explanation": _explanation(lexemes, count, attempt),
         }
-        
-    except Exception as e:
+
+    # Out of attempts: return the last query if it at least validated,
+    # with an explanatory error otherwise.
+    lastFeedback = feedback_history[-1][1] if feedback_history else ""
+    if query and (executor is None or "0 results" in lastFeedback):
+        # Query runs but matches nothing — surface it anyway.
         return {
-            'query': '',
-            'explanation': '',
-            'lexemes_used': [],
-            'error': f'Error generating query: {str(e)}'
+            **base,
+            "query": query,
+            "result_count": 0,
+            "explanation": (
+                "The query is valid but matches nothing in the corpus. "
+                "The described combination may not occur."
+            ),
         }
+    return {
+        **base,
+        "query": query,
+        "error": (
+            f"Could not produce a working query after {max_attempts} "
+            f"attempts. Last feedback:\n{lastFeedback}"
+        ),
+    }
+
+
+def _explanation(lexemes, count, attempts):
+    parts = []
+    if lexemes:
+        shown = ", ".join(f"{e['gloss']} ({e['lex']})" for e in lexemes[:3])
+        parts.append(f"Lexemes: {shown}")
+    if count is not None:
+        capNote = "+" if count >= RESULT_CAP else ""
+        parts.append(f"{count}{capNote} results in the corpus")
+    if attempts > 1:
+        parts.append(f"{attempts} attempts")
+    return ". ".join(parts)

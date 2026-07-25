@@ -28,8 +28,14 @@ MAX_ATTEMPTS = 4
 RESULT_CAP = 100000  # stop counting beyond this many results
 ZERO_PROBE_CAP = 8  # max relaxation probes when diagnosing zero results
 
-GEMINI_MODEL = os.environ.get("AI_QUERY_GEMINI_MODEL", "gemini-2.5-pro")
+# Optional hard override; when unset the best available model is
+# resolved from the API's model list at call time (Google retires model
+# ids regularly — gemini-2.5-pro is already closed to new users).
+GEMINI_MODEL = os.environ.get("AI_QUERY_GEMINI_MODEL", "")
+GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"  # newest GA model as of 2026-07
 ANTHROPIC_MODEL = os.environ.get("AI_QUERY_ANTHROPIC_MODEL", "claude-sonnet-5")
+
+_GEMINI_RESOLVED = None
 
 _TEMPLATE_CACHE = None
 
@@ -137,12 +143,71 @@ def build_prompt(user_input, lexemes, feedback_history):
 # ----------------------------------------------------------------------------
 
 
+def _resolve_gemini_model(genai):
+    """
+    Pick the best generateContent model the key can actually use.
+
+    Preference: newest version first, then pro > flash > flash-lite.
+    Specialized variants (image/tts/live/preview/...) are excluded by the
+    name pattern.  Falls back to GEMINI_FALLBACK_MODEL if listing fails.
+    """
+    global _GEMINI_RESOLVED
+    if GEMINI_MODEL:
+        return GEMINI_MODEL
+    if _GEMINI_RESOLVED:
+        return _GEMINI_RESOLVED
+    best, bestKey = None, None
+    try:
+        for m in genai.list_models():
+            name = m.name.split("/")[-1]
+            if "generateContent" not in getattr(
+                m, "supported_generation_methods", []
+            ):
+                continue
+            match = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-(pro|flash)(-lite)?", name)
+            if not match:
+                continue
+            tier = {"pro": 3, "flash": 2}[match.group(2)]
+            if match.group(3):
+                tier -= 1
+            key = (float(match.group(1)), tier)
+            if bestKey is None or key > bestKey:
+                bestKey, best = key, name
+    except Exception:
+        pass
+    _GEMINI_RESOLVED = best or GEMINI_FALLBACK_MODEL
+    return _GEMINI_RESOLVED
+
+
 def _call_gemini(prompt, api_key):
+    global _GEMINI_RESOLVED
     import google.generativeai as genai
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(GEMINI_MODEL)
-    response = model.generate_content(
+    modelName = _resolve_gemini_model(genai)
+    try:
+        response = _gemini_generate(genai, modelName, prompt)
+    except Exception as e:
+        # Model ids get retired; re-resolve once with the fallback.
+        if modelName != GEMINI_FALLBACK_MODEL and (
+            "404" in str(e) or "not found" in str(e).lower()
+            or "no longer available" in str(e).lower()
+        ):
+            _GEMINI_RESOLVED = GEMINI_FALLBACK_MODEL
+            response = _gemini_generate(genai, GEMINI_FALLBACK_MODEL, prompt)
+        else:
+            raise
+    if not response.candidates:
+        raise RuntimeError("Gemini returned no candidates (safety block?)")
+    finish = getattr(response.candidates[0], "finish_reason", 1)
+    if finish == 3:
+        raise RuntimeError("Gemini blocked the response (safety)")
+    return response.text
+
+
+def _gemini_generate(genai, modelName, prompt):
+    model = genai.GenerativeModel(modelName)
+    return model.generate_content(
         prompt,
         generation_config=genai.types.GenerationConfig(
             temperature=0.1, max_output_tokens=4096
@@ -157,12 +222,6 @@ def _call_gemini(prompt, api_key):
             )
         ],
     )
-    if not response.candidates:
-        raise RuntimeError("Gemini returned no candidates (safety block?)")
-    finish = getattr(response.candidates[0], "finish_reason", 1)
-    if finish == 3:
-        raise RuntimeError("Gemini blocked the response (safety)")
-    return response.text
 
 
 def _call_anthropic(prompt, api_key):

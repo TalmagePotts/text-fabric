@@ -947,133 +947,229 @@ $(window).on("load", () => {
  *
  */
 
+const AI_PROVIDERS = {
+  gemini: {
+    label: "Gemini",
+    storage: "tf_gemini_api_key",
+    placeholder: "Gemini API Key",
+    keyUrl: "https://aistudio.google.com/",
+    baseUrlHint: "https://generativelanguage.googleapis.com",
+  },
+  claude: {
+    label: "Claude",
+    storage: "tf_anthropic_api_key",
+    placeholder: "Anthropic API Key",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    baseUrlHint: "https://api.anthropic.com",
+  },
+}
+
+const AI_PROVIDER_STORAGE = "tf_ai_provider"
+const aiSettingKey = (provider, field) => `tf_ai_${provider}_${field}`
+
 const initAIQueryGenerator = () => {
   const generateBtn = $("#generateQuery")
   const aiPrompt = $("#aiPrompt")
   const apiKey = $("#apiKey")
+  const aiModel = $("#aiModel")
+  const aiBaseUrl = $("#aiBaseUrl")
+  const providerSel = $("#aiProvider")
   const aiStatus = $("#aiStatus")
   const aiExplanation = $("#aiExplanation")
   const queryTextarea = $("#query")
-
-  // Storage key for API key
-  const API_KEY_STORAGE = "tf_gemini_api_key"
-
-  // Load saved API key on initialization
-  const savedKey = localStorage.getItem(API_KEY_STORAGE)
-  if (savedKey) {
-    apiKey.val(savedKey)
-    aiStatus.html('<span class="info">🔑 API key loaded from browser storage</span>')
-  }
-
-  // Helper link for getting API key
   const apiKeyHelper = $("#apiKeyHelper")
-  
-  const updateApiKeyHelper = () => {
-    const key = apiKey.val().trim()
+  const apiKeyLink = $("#apiKeyLink")
+
+  const currentProvider = () => providerSel.val() || "gemini"
+
+  /* Load the saved key/model/base url for the selected provider into the
+   * form, and point the help link at that provider's console.
+   */
+  const loadProviderSettings = announce => {
+    const provider = currentProvider()
+    const spec = AI_PROVIDERS[provider]
+    const key = localStorage.getItem(spec.storage) || ""
+    apiKey.val(key)
+    apiKey.attr("placeholder", spec.placeholder)
+    aiModel.val(localStorage.getItem(aiSettingKey(provider, "model")) || "")
+    aiBaseUrl.val(localStorage.getItem(aiSettingKey(provider, "baseurl")) || "")
+    aiBaseUrl.attr("placeholder", `API base URL (default: ${spec.baseUrlHint})`)
+    apiKeyLink.attr("href", spec.keyUrl)
+    apiKeyLink.html(`Get a ${spec.label} API key here`)
     if (key) {
       apiKeyHelper.hide()
+      if (announce) {
+        aiStatus.html(
+          `<span class="info">🔑 ${spec.label} key loaded from browser storage</span>`
+        )
+      }
     } else {
+      /* The helper link already prompts for a key; no status line too. */
       apiKeyHelper.show()
+      if (announce) {
+        aiStatus.html("")
+      }
     }
+    console.log(`[AI] provider=${provider} hasKey=${!!key}`)
   }
-  
-  // Save API key to localStorage when it changes
-  apiKey.on("input", () => {
+
+  providerSel.val(localStorage.getItem(AI_PROVIDER_STORAGE) || "gemini")
+  loadProviderSettings(true)
+
+  providerSel.off("change").change(() => {
+    localStorage.setItem(AI_PROVIDER_STORAGE, currentProvider())
+    loadProviderSettings(true)
+    apiKey.focus()
+  })
+
+  /* Alt+P cycles providers from anywhere in the AI section. */
+  $("#aiQueryGenerator").off("keydown.provider").on("keydown.provider", e => {
+    if (e.altKey && (e.key == "p" || e.key == "P")) {
+      e.preventDefault()
+      providerSel.val(currentProvider() == "gemini" ? "claude" : "gemini")
+      providerSel.trigger("change")
+    }
+  })
+
+  apiKey.off("input").on("input", () => {
+    const spec = AI_PROVIDERS[currentProvider()]
     const key = apiKey.val().trim()
     if (key) {
-      localStorage.setItem(API_KEY_STORAGE, key)
+      localStorage.setItem(spec.storage, key)
+      apiKeyHelper.hide()
     } else {
-      localStorage.removeItem(API_KEY_STORAGE)
+      localStorage.removeItem(spec.storage)
+      apiKeyHelper.show()
     }
-    updateApiKeyHelper()
   })
-  
-  // Initial check on page load
-  updateApiKeyHelper()
 
-  // Clear API key button
+  const persistSetting = (elem, field) => {
+    elem.off("input").on("input", () => {
+      const value = elem.val().trim()
+      const storeKey = aiSettingKey(currentProvider(), field)
+      if (value) {
+        localStorage.setItem(storeKey, value)
+      } else {
+        localStorage.removeItem(storeKey)
+      }
+    })
+  }
+  persistSetting(aiModel, "model")
+  persistSetting(aiBaseUrl, "baseurl")
+
   const clearBtn = $("#clearApiKey")
   clearBtn.off("click").click(e => {
     e.preventDefault()
-    if (confirm("Clear saved API key from browser storage?")) {
-      localStorage.removeItem(API_KEY_STORAGE)
+    const spec = AI_PROVIDERS[currentProvider()]
+    if (confirm(`Clear saved ${spec.label} API key from browser storage?`)) {
+      localStorage.removeItem(spec.storage)
       apiKey.val("")
-      updateApiKeyHelper()
-      aiStatus.html('<span class="info">🗑️ API key cleared from storage</span>')
+      apiKeyHelper.show()
+      aiStatus.html(
+        `<span class="info">🗑️ ${spec.label} API key cleared from storage</span>`
+      )
     }
   })
 
-  generateBtn.off("click").click(async e => {
-    e.preventDefault()
-
+  const runGeneration = async () => {
     const prompt = aiPrompt.val().trim()
     const key = apiKey.val().trim()
+    const provider = currentProvider()
+    const spec = AI_PROVIDERS[provider]
 
-    // Clear previous messages
     aiStatus.html("")
     aiExplanation.html("")
 
-    // Validation
     if (!prompt) {
-      aiStatus.html('<span class="error">⚠️ Please enter a description of what you want to search for</span>')
+      aiStatus.html(
+        '<span class="error">⚠️ Please enter a description of what you want to search for</span>'
+      )
+      aiPrompt.focus()
       return
     }
-
     if (!key) {
-      aiStatus.html('<span class="error">⚠️ Please enter your Gemini API key</span>')
+      aiStatus.html(
+        `<span class="error">⚠️ Please enter your ${spec.label} API key</span>`
+      )
+      apiKey.focus()
       return
     }
 
-    // Show loading state
     generateBtn.prop("disabled", true)
     generateBtn.html('<span class="fa fa-spinner fa-spin"></span> Generating...')
-    aiStatus.html('<span class="info">🤖 Generating query...</span>')
+    aiStatus.html(
+      `<span class="info">🤖 Generating query with ${spec.label}...</span>`
+    )
+    console.log(`[AI] generating: provider=${provider} prompt=${prompt}`)
 
     try {
       const response = await fetch("/ai/generate_query", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt,
-          api_key: key
-        })
+          prompt,
+          api_key: key,
+          provider,
+          model: aiModel.val().trim(),
+          base_url: aiBaseUrl.val().trim(),
+        }),
       })
 
-      // Read response as text first, then try to parse as JSON
       const responseText = await response.text()
-      
       let data
       try {
         data = JSON.parse(responseText)
       } catch (parseError) {
-        aiStatus.html(`<span class="error">❌ Server returned invalid response. Expected JSON but got: ${responseText.substring(0, 200)}</span>`)
+        aiStatus.html(
+          `<span class="error">❌ Server returned invalid response: ${responseText.substring(
+            0,
+            200
+          )}</span>`
+        )
         return
       }
+
+      console.log("[AI] response", data)
 
       if (!response.ok || data.error) {
-        aiStatus.html(`<span class="error">❌ Error: ${data.error || 'Unknown error'}</span>`)
+        aiStatus.html(
+          `<span class="error">❌ Error: ${data.error || "Unknown error"}</span>`
+        )
         return
       }
 
-      // Success! Insert the query
       queryTextarea.val(data.query)
-      aiStatus.html('<span class="success">✅ Query generated successfully!</span>')
-
+      const countMsg =
+        data.result_count == null
+          ? ""
+          : data.result_count == 0
+          ? " — but it matches nothing in the corpus"
+          : ` — ${data.result_count} results`
+      aiStatus.html(
+        `<span class="success">✅ Query generated${countMsg}</span>`
+      )
       if (data.explanation) {
         aiExplanation.html(`<span class="info">💡 ${data.explanation}</span>`)
       }
-
-      // Store the form to persist the query
       storeForm()
-
     } catch (error) {
       aiStatus.html(`<span class="error">❌ Network error: ${error.message}</span>`)
     } finally {
-      // Reset button
       generateBtn.prop("disabled", false)
       generateBtn.html("Generate Query")
+    }
+  }
+
+  generateBtn.off("click").click(e => {
+    e.preventDefault()
+    runGeneration()
+  })
+
+  /* Ctrl/Cmd+Enter in the prompt box submits. */
+  aiPrompt.off("keydown").on("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key == "Enter") {
+      e.preventDefault()
+      runGeneration()
     }
   })
 }

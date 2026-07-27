@@ -484,6 +484,11 @@ details.ai-generator {
 	padding: 8px;
 	margin: 10px 6px;
 	background-color: var(--haze-back);
+	/* The left column is flex:1 0 auto, so it sizes to max-content and
+	   cannot shrink: an unbounded panel here stretches the whole column
+	   (and the page) to fit the help text on one line. */
+	max-width: 32rem;
+	box-sizing: border-box;
 }
 
 details.ai-generator summary {
@@ -529,11 +534,44 @@ textarea.ai-prompt {
 
 .ai-controls {
 	display: flex;
-	flex-flow: row nowrap;
+	flex-flow: row wrap;
 	justify-content: flex-start;
 	align-items: center;
 	gap: 8px;
 	margin: 10px 6px;
+}
+
+label.ai-provider {
+	flex: 0 0 auto;
+}
+
+label.ai-provider select {
+	font-size: medium;
+	padding: 7px 8px;
+	border: 2px solid var(--fog-rim);
+	border-radius: 4px;
+	background-color: var(--gray-back);
+	color: var(--gray-fore);
+	cursor: pointer;
+}
+
+input.ai-model,
+input.ai-baseurl {
+	font-size: small;
+	font-family: monospace;
+	padding: 6px 8px;
+	border: 2px solid var(--fog-rim);
+	border-radius: 4px;
+}
+
+input.ai-model {
+	flex: 1 1 30%;
+	min-width: 140px;
+}
+
+input.ai-baseurl {
+	flex: 2 1 55%;
+	min-width: 180px;
 }
 
 input.api-key {
@@ -566,8 +604,10 @@ button#generateQuery {
 	flex: 0 0 auto;
 	font-size: medium;
 	padding: 8px 16px;
-	background-color: var(--blue-haze-back);
-	color: var(--dark-fore);
+	/* --dark-fore is white and --blue-haze-back is 97% white, so the
+	   original pairing rendered the label invisible. */
+	background-color: var(--blue-haze-fore);
+	color: var(--button-fore);
 	border: 2px solid var(--blue-haze-fore);
 	border-radius: 6px;
 	cursor: pointer;
@@ -575,7 +615,8 @@ button#generateQuery {
 }
 
 button#generateQuery:hover:not(:disabled) {
-	background-color: var(--marine-haze-back);
+	background-color: var(--blue-haze-back);
+	color: var(--blue-haze-fore);
 }
 
 button#generateQuery:disabled {
@@ -608,4 +649,279 @@ button#generateQuery:disabled {
 .ai-explanation .info {
 	color: var(--fog-fore);
 	font-style: italic;
+}
+
+/* ==========================================================================
+   MOBILE / NARROW SCREENS
+
+   The desktop layout is a fixed row of five 99vh columns, which is
+   unusable on a phone.  Below 900px the columns stack vertically and the
+   page scrolls as one document; the sidebar becomes a horizontal tab
+   strip pinned to the top.  Controls get 44px touch targets and 16px
+   fonts (iOS Safari zooms the page when a focused input is smaller).
+   ========================================================================== */
+
+@media screen and (max-width: 900px) {
+	body {
+		margin: 0;
+	}
+
+	/* The sidebar is sticky; keep anchored scrolling clear of it. */
+	html {
+		scroll-padding-top: 3.2rem;
+	}
+
+	div.page {
+		flex-flow: column nowrap;
+		align-items: stretch;
+		width: 100%;
+		height: auto;
+		min-height: 100vh;
+	}
+
+	/* Sidebar: vertical rail -> horizontal, scrollable tab strip. */
+	#sidebar {
+		flex: 0 0 auto;
+		display: flex;
+		flex-flow: row nowrap;
+		align-items: stretch;
+		height: auto;
+		width: 100%;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		border-bottom: 2px solid var(--fog-rim);
+	}
+
+	#sidebar>div {
+		flex: 0 0 auto;
+		flex-flow: row nowrap;
+		justify-content: center;
+		align-items: center;
+		height: 2.8rem;
+		width: auto;
+		min-width: 4.5rem;
+		border-bottom: 0;
+		border-top: 2px solid var(--fog-rim);
+	}
+
+	#sidebar>div>a {
+		height: auto;
+		width: auto;
+		padding: 0 0.75rem;
+		font-size: medium;
+		transform: none;
+		margin-bottom: 0;
+		line-height: 2.8rem;
+	}
+
+	#sidebar>div[status=about] {
+		height: 2.8rem;
+		width: auto;
+		min-width: 3rem;
+		padding-bottom: 0;
+		border-left: 0;
+		border-right: 0;
+	}
+
+	#sidebar>div[status=about]>a {
+		height: auto;
+		width: auto;
+		display: flex;
+		align-items: center;
+	}
+
+	img.icon {
+		height: 28px;
+		width: 28px;
+	}
+
+	/* Sidebar content panel: full width, capped height so it never
+	   pushes the actual work area off screen. */
+	#sidebarcont {
+		flex: 0 0 auto;
+		height: auto;
+		max-width: 100%;
+		max-height: 60vh;
+	}
+
+	#sidebarcont>div {
+		min-width: 0;
+		max-width: 100%;
+		margin: 8px;
+	}
+
+	/* Columns stack and grow with their content. */
+	div.leftcol,
+	div.midcol,
+	div.rightcol,
+	div.rightcolx {
+		flex: 0 0 auto;
+		width: 100%;
+		max-width: 100%;
+		height: auto;
+		min-width: 0;
+		border-left: 0;
+		border-right: 0;
+		border-top: 1pt solid var(--fog-rim);
+		padding: 8px;
+		resize: none;
+		overflow-x: auto;
+	}
+
+	div.leftcol {
+		border-top: 0;
+	}
+
+	p.scharacters {
+		width: auto;
+	}
+
+	/* Touch targets and no-zoom font sizes. */
+	textarea.query,
+	textarea.ai-prompt,
+	textarea.sections,
+	textarea.tuples,
+	input.api-key,
+	input.ai-model,
+	input.ai-baseurl,
+	label.ai-provider select {
+		font-size: 16px;
+		width: 100%;
+		box-sizing: border-box;
+		margin-left: 0;
+		margin-right: 0;
+	}
+
+	/* The desktop heights (20rem for the search pad) eat a whole phone
+	   screen; they stay resizable by drag. */
+	textarea.query {
+		height: 10rem;
+	}
+
+	textarea.tuples,
+	textarea.sections {
+		height: 3.5rem;
+	}
+
+	/* Control rows that are single-line on desktop must wrap, not clip. */
+	div.cline,
+	div.tfline,
+	div.passages,
+	div.materialnav,
+	#pages,
+	#nresults {
+		flex-flow: row wrap;
+	}
+
+	/* Job toolbar: buttons wrap and the job selector takes its own row
+	   instead of pushing the last buttons off screen. */
+	#jobs {
+		display: flex;
+		flex-flow: row wrap;
+		align-items: center;
+		gap: 4px;
+		padding: 4px;
+	}
+
+	#jobs>button {
+		flex: 0 0 auto;
+		min-width: 44px;
+	}
+
+	#jobs>select.selinp {
+		flex: 1 1 100%;
+		order: -1;
+		font-size: 16px;
+		min-height: 44px;
+		max-width: 100%;
+	}
+
+	div.materialnav,
+	#navigation {
+		max-width: 100%;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	button,
+	a.medium,
+	a.small {
+		min-height: 44px;
+	}
+
+	button.xl {
+		min-width: 44px;
+	}
+
+	details.ai-generator {
+		max-width: 100%;
+		margin: 8px 4px;
+	}
+
+	/* AI section: one control per row, provider + key first. */
+	.ai-controls {
+		flex-flow: column nowrap;
+		align-items: stretch;
+		margin: 8px;
+	}
+
+	.ai-controls>* {
+		width: 100%;
+		min-width: 0;
+	}
+
+	label.ai-provider select {
+		width: 100%;
+		min-height: 44px;
+	}
+
+	button#clearApiKey,
+	button#generateQuery {
+		width: 100%;
+	}
+
+	/* Result tables scroll inside themselves rather than stretching
+	   the page horizontally. */
+	table {
+		display: block;
+		max-width: 100%;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+}
+
+/* Very small phones: tighten padding further. */
+@media screen and (max-width: 480px) {
+	div.leftcol,
+	div.midcol,
+	div.rightcol,
+	div.rightcolx {
+		padding: 6px 4px;
+	}
+
+	#sidebar>div {
+		min-width: 3.8rem;
+	}
+
+	#sidebar>div>a {
+		padding: 0 0.4rem;
+		font-size: small;
+	}
+}
+
+/* Advanced AI settings (model / custom endpoint), collapsed by default. */
+details.ai-advanced {
+	margin: 4px 6px;
+}
+
+details.ai-advanced summary {
+	cursor: pointer;
+	padding: 4px 2px;
+}
+
+details.ai-advanced summary:hover {
+	background-color: var(--fog-back);
 }

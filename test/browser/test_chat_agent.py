@@ -269,3 +269,42 @@ class TestEpistemicHonesty:
     def test_says_etcbc_analysis_is_a_model_not_fact(self):
         prompt = chat_agent.SYSTEM_PROMPT.lower()
         assert "one linguistic model" in prompt or "not neutral" in prompt
+
+
+class TestConfigurableBudget:
+    def test_ceiling_is_defined_and_above_default(self):
+        assert chat_agent.TOOL_CALL_CEILING > chat_agent.MAX_TOOL_CALLS
+
+    def test_higher_budget_allows_more_calls(self, patched):
+        script = [
+            ("", [{"id": str(i), "name": "run_query", "arguments": {}}])
+            for i in range(25)
+        ]
+        script.append(("Final.", []))
+        patched["install"](script, tool=ok_tool)
+        events = call(max_tool_calls=20)
+        executed = [e for e in events if e["type"] == "tool_call"]
+        assert len(executed) == 20
+        assert [e for e in events if e["type"] == "done"][0]["tool_calls"] == 20
+
+    def test_budget_of_one(self, patched):
+        script = [
+            ("", [{"id": str(i), "name": "run_query", "arguments": {}}])
+            for i in range(5)
+        ]
+        script.append(("Final.", []))
+        patched["install"](script, tool=ok_tool)
+        events = call(max_tool_calls=1)
+        assert len([e for e in events if e["type"] == "tool_call"]) == 1
+        assert [e for e in events if e["type"] == "done"]
+
+    def test_turn_limit_scales_with_budget(self, patched):
+        """A large budget must not be cut short by a fixed turn cap."""
+        script = [
+            ("", [{"id": str(i), "name": "run_query", "arguments": {}}])
+            for i in range(30)
+        ]
+        script.append(("Final.", []))
+        patched["install"](script, tool=ok_tool)
+        events = call(max_tool_calls=30)
+        assert len([e for e in events if e["type"] == "tool_call"]) == 30

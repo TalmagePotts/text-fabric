@@ -312,7 +312,7 @@ def factory(web):
         from flask import Response, jsonify, request, stream_with_context
 
         try:
-            from .chat_agent import run_turn
+            from .chat_agent import MAX_TOOL_CALLS, TOOL_CALL_CEILING, run_turn
         except Exception as e:
             return jsonify({"error": f"Chat module failed to load: {e}"}), 500
 
@@ -323,6 +323,14 @@ def factory(web):
         model = (data.get("model") or "").strip()
         baseUrl = (data.get("base_url") or "").strip()
         apiKey = (data.get("api_key") or "").strip()
+
+        # The client chooses the research budget; clamp it here so a
+        # malformed or over-eager value cannot start a runaway loop.
+        try:
+            maxToolCalls = int(data.get("max_tool_calls") or MAX_TOOL_CALLS)
+        except (TypeError, ValueError):
+            maxToolCalls = MAX_TOOL_CALLS
+        maxToolCalls = max(1, min(maxToolCalls, TOOL_CALL_CEILING))
 
         if not apiKey:
             envVar = (
@@ -362,6 +370,7 @@ def factory(web):
                     provider=provider,
                     model=model,
                     base_url=baseUrl,
+                    max_tool_calls=maxToolCalls,
                 ):
                     yield f"data: {jsonlib.dumps(event)}\n\n"
             except Exception as e:

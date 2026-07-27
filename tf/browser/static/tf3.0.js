@@ -1183,6 +1183,15 @@ const initAIQueryGenerator = () => {
  */
 
 const CHAT_CONV_STORAGE = "tf_chat_conv_id"
+const CHAT_LOG_STORAGE = "tf_chat_log"
+const CHAT_MAXTOOLS_STORAGE = "tf_chat_max_tools"
+const CHAT_MAXTOOLS_DEFAULT = 10
+/* Hard ceiling mirrored on the server; a runaway loop is expensive. */
+const CHAT_MAXTOOLS_LIMIT = 40
+/* localStorage is ~5MB and shared with the rest of the browser state, so
+ * keep the transcript well under that and drop the oldest entries first. */
+const CHAT_LOG_ENTRIES = 200
+const CHAT_LOG_BYTES = 600000
 
 const chatEscape = text =>
   String(text == null ? "" : text)
@@ -1289,6 +1298,7 @@ const initChat = () => {
   const resetBtn = $("#chatReset")
   const status = $("#chatStatus")
   const empty = $("#chatEmpty")
+  const maxTools = $("#chatMaxTools")
 
   let convId = localStorage.getItem(CHAT_CONV_STORAGE)
   if (!convId) {
@@ -1296,6 +1306,70 @@ const initChat = () => {
     localStorage.setItem(CHAT_CONV_STORAGE, convId)
   }
   let controller = null
+
+  /* How many corpus searches the agent may run per question. Higher
+   * means it can chase harder questions, at more time and API cost. */
+  const readMaxTools = () => {
+    const stored = parseInt(localStorage.getItem(CHAT_MAXTOOLS_STORAGE), 10)
+    if (!stored || stored < 1) {
+      return CHAT_MAXTOOLS_DEFAULT
+    }
+    return Math.min(stored, CHAT_MAXTOOLS_LIMIT)
+  }
+  maxTools.val(readMaxTools())
+  maxTools.off("change input").on("change input", () => {
+    let value = parseInt(maxTools.val(), 10)
+    if (!value || value < 1) {
+      value = CHAT_MAXTOOLS_DEFAULT
+    }
+    value = Math.min(value, CHAT_MAXTOOLS_LIMIT)
+    localStorage.setItem(CHAT_MAXTOOLS_STORAGE, String(value))
+    console.log(`[chat] max tool calls = ${value}`)
+  })
+  maxTools.off("blur").on("blur", () => maxTools.val(readMaxTools()))
+
+  /* The transcript is kept in the browser so a reload (or the nightly
+   * reboot) does not lose the conversation. The server keeps its own
+   * copy of the provider messages; if it restarted, the transcript
+   * survives here but the assistant's memory of it does not, which is
+   * what the restored marker warns about. */
+  let log = []
+  const loadLog = () => {
+    try {
+      const raw = localStorage.getItem(CHAT_LOG_STORAGE)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch (e) {
+      console.warn("[chat] could not read stored transcript", e)
+      return []
+    }
+  }
+  const saveLog = () => {
+    while (log.length > CHAT_LOG_ENTRIES) {
+      log.shift()
+    }
+    try {
+      let payload = JSON.stringify(log)
+      while (payload.length > CHAT_LOG_BYTES && log.length > 1) {
+        log.shift()
+        payload = JSON.stringify(log)
+      }
+      localStorage.setItem(CHAT_LOG_STORAGE, payload)
+    } catch (e) {
+      /* Quota exceeded: keep only the tail rather than losing everything. */
+      console.warn("[chat] transcript storage full, trimming", e)
+      log = log.slice(-20)
+      try {
+        localStorage.setItem(CHAT_LOG_STORAGE, JSON.stringify(log))
+      } catch (e2) {
+        localStorage.removeItem(CHAT_LOG_STORAGE)
+      }
+    }
+  }
+  const record = entry => {
+    log.push(entry)
+    saveLog()
+  }
 
   /* Only follow the tail when the user is already at the bottom, so
    * scrolling back through a long answer is not yanked away.
@@ -1432,6 +1506,36 @@ const initChat = () => {
     }
   }
 
+  /* Replay whatever this browser remembers of the conversation. */
+  const restore = () => {
+    log = loadLog()
+    if (!log.length) {
+      return
+    }
+    empty.hide()
+    messages.append(
+      $('<div class="chat-restored"></div>').text(
+        "restored from this browser"
+      )
+    )
+    for (const entry of log) {
+      if (entry.k == "user") {
+        addBubble("user", chatEscape(entry.text))
+      } else if (entry.k == "assistant") {
+        addBubble("assistant", chatMarkdown(entry.text))
+      } else if (entry.k == "note") {
+        addBubble("note", chatMarkdown(entry.text))
+      } else if (entry.k == "tool" && entry.call) {
+        addToolRow(entry.call)
+      } else if (entry.k == "toolResult" && entry.result) {
+        completeToolRow(entry.result)
+      }
+    }
+    scrollToEnd(true)
+    console.log(`[chat] restored ${log.length} transcript entries`)
+  }
+  restore()
+
   const providerSettings = () => {
     const provider = localStorage.getItem(AI_PROVIDER_STORAGE) || "gemini"
     const spec = AI_PROVIDERS[provider]
@@ -1452,6 +1556,7 @@ const initChat = () => {
       return
     }
     addBubble("user", chatEscape(question))
+    record({ k: "user", text: question })
     input.val("")
     setBusy(true)
     status.text("Thinking…")
@@ -1463,7 +1568,12 @@ const initChat = () => {
       const response = await fetch("/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, conv_id: convId, ...settings }),
+        body: JSON.stringify({
+          question,
+          conv_id: convId,
+          max_tool_calls: readMaxTools(),
+          ...settings,
+        }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -1506,12 +1616,16 @@ const initChat = () => {
           } else if (event.type == "tool_call") {
             status.text("Searching the corpus…")
             addToolRow(event)
+            record({ k: "tool", call: event })
           } else if (event.type == "tool_result") {
             completeToolRow(event)
+            record({ k: "toolResult", result: event })
           } else if (event.type == "note") {
             addBubble("note", chatMarkdown(event.text))
+            record({ k: "note", text: event.text })
           } else if (event.type == "text") {
             answerBubble = addBubble("assistant", chatMarkdown(event.delta))
+            record({ k: "assistant", text: event.delta })
           } else if (event.type == "error") {
             status.html(`<span class="error">${chatEscape(event.message)}</span>`)
           } else if (event.type == "done") {
@@ -1578,9 +1692,11 @@ const initChat = () => {
     const previous = convId
     convId = `c${Date.now()}${Math.floor(Math.random() * 1e6)}`
     localStorage.setItem(CHAT_CONV_STORAGE, convId)
-    messages.find(".chat-msg, .chat-tool").remove()
+    messages.find(".chat-msg, .chat-tool, .chat-restored").remove()
     empty.show()
     status.text("")
+    log = []
+    localStorage.removeItem(CHAT_LOG_STORAGE)
     try {
       await fetch("/ai/chat/reset", {
         method: "POST",

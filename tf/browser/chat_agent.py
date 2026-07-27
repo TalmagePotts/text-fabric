@@ -33,7 +33,9 @@ from .ai_query import (
 )
 
 MAX_TOOL_CALLS = int(os.environ.get("AI_CHAT_MAX_TOOL_CALLS", "10"))
-MAX_TURNS = MAX_TOOL_CALLS + 2
+# Upper bound the UI may ask for; guards against a runaway loop burning
+# the API budget regardless of what the client sends.
+TOOL_CALL_CEILING = int(os.environ.get("AI_CHAT_TOOL_CALL_CEILING", "40"))
 MAX_TOKENS = 4096
 HISTORY_LIMIT = 40  # messages kept per conversation
 CONVERSATION_LIMIT = 50  # conversations kept in memory
@@ -577,7 +579,12 @@ def run_turn(
     toolCallCount = 0
     answer = ""
 
-    for _turn in range(MAX_TURNS):
+    # Each turn may batch several calls, so the turn limit only has to
+    # exceed the budget: two spare turns cover the final answer and the
+    # one where the model is told the budget is spent.
+    maxTurns = max(3, max_tool_calls + 2)
+
+    for _turn in range(maxTurns):
         yield {"type": "status", "phase": "thinking"}
         try:
             text, calls, assistantMessage = adapter.turn(messages)

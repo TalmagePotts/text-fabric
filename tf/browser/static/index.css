@@ -707,6 +707,44 @@ button#generateQuery:disabled {
 	border-bottom: 1px solid var(--fog-rim);
 }
 
+.chat-header-controls {
+	display: flex;
+	flex-flow: row wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+label.chat-depth {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	color: var(--fog-fore);
+}
+
+label.chat-depth input {
+	width: 3.4rem;
+	font-size: 12px;
+	padding: 3px 4px;
+	margin: 0;
+	border: 1px solid var(--fog-rim);
+	border-radius: 4px;
+	text-align: right;
+}
+
+/* Marks where a transcript restored from localStorage begins: the
+   messages are here, but the server may have forgotten the context if it
+   restarted in between. */
+.chat-restored {
+	align-self: center;
+	font-size: 11px;
+	color: var(--fog-fore);
+	font-style: italic;
+	padding: 2px 8px;
+	border-radius: 8px;
+	background-color: var(--haze-back);
+}
+
 #chatMessages {
 	flex: 1 1 auto;
 	display: flex;

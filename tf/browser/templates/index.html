@@ -51,8 +51,15 @@
 					<div id="chatPanel">
 						<div id="chatHeader">
 							<span class="ilab">🔎 Research chat</span>
-							<button type="button" id="chatReset" class="small"
-								title="Start a new conversation">New</button>
+							<span class="chat-header-controls">
+								<label class="chat-depth"
+									title="How many corpus searches the agent may run per question. Higher answers harder questions but costs more time and API usage.">
+									searches
+									<input type="number" id="chatMaxTools" min="1" max="40" step="1" value="10" />
+								</label>
+								<button type="button" id="chatReset" class="small"
+									title="Start a new conversation and clear the stored transcript">New</button>
+							</span>
 						</div>
 						<div id="chatMessages" aria-live="polite">
 							<div id="chatEmpty" class="chat-empty">

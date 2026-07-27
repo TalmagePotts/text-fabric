@@ -1,2 +1,5 @@
+# AI query generation extras.
+# Install at least one provider SDK; both are supported and selectable
+# in the browser UI.
 google-generativeai>=0.3.0
-pandas>=1.3.0
+anthropic>=0.40.0

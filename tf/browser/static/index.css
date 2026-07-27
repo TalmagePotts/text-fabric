@@ -529,11 +529,44 @@ textarea.ai-prompt {
 
 .ai-controls {
 	display: flex;
-	flex-flow: row nowrap;
+	flex-flow: row wrap;
 	justify-content: flex-start;
 	align-items: center;
 	gap: 8px;
 	margin: 10px 6px;
+}
+
+label.ai-provider {
+	flex: 0 0 auto;
+}
+
+label.ai-provider select {
+	font-size: medium;
+	padding: 7px 8px;
+	border: 2px solid var(--fog-rim);
+	border-radius: 4px;
+	background-color: var(--gray-back);
+	color: var(--gray-fore);
+	cursor: pointer;
+}
+
+input.ai-model,
+input.ai-baseurl {
+	font-size: small;
+	font-family: monospace;
+	padding: 6px 8px;
+	border: 2px solid var(--fog-rim);
+	border-radius: 4px;
+}
+
+input.ai-model {
+	flex: 1 1 30%;
+	min-width: 140px;
+}
+
+input.ai-baseurl {
+	flex: 2 1 55%;
+	min-width: 180px;
 }
 
 input.api-key {

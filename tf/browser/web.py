@@ -228,11 +228,22 @@ def factory(web):
             
             user_prompt = data.get('prompt', '').strip()
             api_key = data.get('api_key', '').strip()
-            
-            # Fall back to environment variable if no API key provided
+            provider = data.get('provider', '').strip().lower()
+            model = data.get('model', '').strip()
+            base_url = data.get('base_url', '').strip()
+
+            # Fall back to environment variables if no API key provided;
+            # which variable depends on the selected provider.
             if not api_key:
-                api_key = os.environ.get('GEMINI_API_KEY', '').strip()
-            
+                envVar = (
+                    'ANTHROPIC_API_KEY'
+                    if provider == 'claude'
+                    else 'GEMINI_API_KEY'
+                )
+                api_key = os.environ.get(envVar, '').strip()
+                if not api_key and not provider:
+                    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+
             if not user_prompt:
                 return jsonify({
                     'query': '',
@@ -242,13 +253,21 @@ def factory(web):
                 }), 400
             
             if not api_key:
+                envVar = (
+                    'ANTHROPIC_API_KEY'
+                    if provider == 'claude'
+                    else 'GEMINI_API_KEY'
+                )
                 return jsonify({
                     'query': '',
                     'explanation': '',
                     'lexemes_used': [],
-                    'error': 'API key is required. Either enter it in the UI or set GEMINI_API_KEY environment variable.'
+                    'error': (
+                        f'API key is required. Either enter it in the UI '
+                        f'or set the {envVar} environment variable.'
+                    )
                 }), 400
-            
+
             # Generate the query in a closed loop against the loaded
             # corpus: generated templates are validated, executed, and
             # repaired from Text-Fabric's own error messages before
@@ -257,7 +276,14 @@ def factory(web):
                 executor = make_executor(web.kernelApi.app)
             except Exception:
                 executor = None
-            result = generate_query(user_prompt, api_key, executor=executor)
+            result = generate_query(
+                user_prompt,
+                api_key,
+                executor=executor,
+                provider=provider,
+                model=model,
+                base_url=base_url,
+            )
             
             if result.get('error'):
                 return jsonify(result), 400

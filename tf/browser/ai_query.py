@@ -28,14 +28,26 @@ MAX_ATTEMPTS = 4
 RESULT_CAP = 100000  # stop counting beyond this many results
 ZERO_PROBE_CAP = 8  # max relaxation probes when diagnosing zero results
 
-# Optional hard override; when unset the best available model is
+# Optional hard overrides; when unset, Gemini's best available model is
 # resolved from the API's model list at call time (Google retires model
 # ids regularly — gemini-2.5-pro is already closed to new users).
 GEMINI_MODEL = os.environ.get("AI_QUERY_GEMINI_MODEL", "")
 GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"  # newest GA model as of 2026-07
 ANTHROPIC_MODEL = os.environ.get("AI_QUERY_ANTHROPIC_MODEL", "claude-sonnet-5")
 
+# Custom endpoints (proxies, gateways, self-hosted relays).  A request
+# may override these per call; these are the server-wide defaults.
+GEMINI_BASE_URL = os.environ.get("AI_QUERY_GEMINI_BASE_URL", "")
+ANTHROPIC_BASE_URL = os.environ.get("AI_QUERY_ANTHROPIC_BASE_URL", "")
+
+PROVIDERS = ("gemini", "claude")
+
 _GEMINI_RESOLVED = None
+
+
+def detect_provider(api_key):
+    """Infer the provider from the shape of the key."""
+    return "claude" if api_key.startswith("sk-ant") else "gemini"
 
 _TEMPLATE_CACHE = None
 
@@ -179,19 +191,31 @@ def _resolve_gemini_model(genai):
     return _GEMINI_RESOLVED
 
 
-def _call_gemini(prompt, api_key):
+def _call_gemini(prompt, api_key, model="", base_url=""):
     global _GEMINI_RESOLVED
     import google.generativeai as genai
 
-    genai.configure(api_key=api_key)
-    modelName = _resolve_gemini_model(genai)
+    clientOptions = {}
+    base_url = base_url or GEMINI_BASE_URL
+    if base_url:
+        clientOptions["api_endpoint"] = base_url.replace("https://", "").replace(
+            "http://", ""
+        ).rstrip("/")
+    genai.configure(api_key=api_key, client_options=clientOptions or None)
+    modelName = model or _resolve_gemini_model(genai)
     try:
         response = _gemini_generate(genai, modelName, prompt)
     except Exception as e:
-        # Model ids get retired; re-resolve once with the fallback.
-        if modelName != GEMINI_FALLBACK_MODEL and (
-            "404" in str(e) or "not found" in str(e).lower()
-            or "no longer available" in str(e).lower()
+        # Model ids get retired; re-resolve once with the fallback (only
+        # when the model was auto-picked, not explicitly requested).
+        if (
+            not model
+            and modelName != GEMINI_FALLBACK_MODEL
+            and (
+                "404" in str(e)
+                or "not found" in str(e).lower()
+                or "no longer available" in str(e).lower()
+            )
         ):
             _GEMINI_RESOLVED = GEMINI_FALLBACK_MODEL
             response = _gemini_generate(genai, GEMINI_FALLBACK_MODEL, prompt)
@@ -224,12 +248,15 @@ def _gemini_generate(genai, modelName, prompt):
     )
 
 
-def _call_anthropic(prompt, api_key):
+def _call_anthropic(prompt, api_key, model="", base_url=""):
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key)
+    base_url = base_url or ANTHROPIC_BASE_URL
+    client = anthropic.Anthropic(
+        api_key=api_key, **({"base_url": base_url} if base_url else {})
+    )
     response = client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=model or ANTHROPIC_MODEL,
         max_tokens=4096,
         temperature=0.1,
         messages=[{"role": "user", "content": prompt}],
@@ -239,10 +266,17 @@ def _call_anthropic(prompt, api_key):
     )
 
 
-def call_llm(prompt, api_key):
-    if api_key.startswith("sk-ant"):
-        return _call_anthropic(prompt, api_key)
-    return _call_gemini(prompt, api_key)
+def call_llm(prompt, api_key, provider="", model="", base_url=""):
+    """Dispatch to the selected provider (auto-detected from the key
+    shape when not given explicitly)."""
+    provider = (provider or "").strip().lower() or detect_provider(api_key)
+    if provider not in PROVIDERS:
+        raise ValueError(
+            f"Unknown provider {provider!r}; expected one of {', '.join(PROVIDERS)}"
+        )
+    if provider == "claude":
+        return _call_anthropic(prompt, api_key, model=model, base_url=base_url)
+    return _call_gemini(prompt, api_key, model=model, base_url=base_url)
 
 
 def strip_fences(text):
@@ -359,15 +393,31 @@ def diagnose_zero(query, executor):
 # ----------------------------------------------------------------------------
 
 
-def generate_query(user_prompt, api_key, executor=None, max_attempts=MAX_ATTEMPTS):
+def generate_query(
+    user_prompt,
+    api_key,
+    executor=None,
+    max_attempts=MAX_ATTEMPTS,
+    provider="",
+    model="",
+    base_url="",
+):
     """
     Generate a Text-Fabric query from natural language.
 
+    `provider` is "gemini" or "claude" (auto-detected from the key when
+    omitted); `model` and `base_url` override the provider defaults.
+
     Returns a dict with keys: query, explanation, lexemes_used, error,
-    result_count, attempts.  `error` is None on success.  When `executor`
-    is given (see `make_executor`), the returned query is guaranteed to
-    parse, and its result count is reported.
+    result_count, attempts, provider.  `error` is None on success.  When
+    `executor` is given (see `make_executor`), the returned query is
+    guaranteed to parse, and its result count is reported.
     """
+    user_prompt = (user_prompt or "").strip()
+    api_key = (api_key or "").strip()
+    provider = (provider or "").strip().lower()
+    model = (model or "").strip()
+    base_url = (base_url or "").strip()
     base = {
         "query": "",
         "explanation": "",
@@ -375,13 +425,20 @@ def generate_query(user_prompt, api_key, executor=None, max_attempts=MAX_ATTEMPT
         "error": None,
         "result_count": None,
         "attempts": 0,
+        "provider": provider or (detect_provider(api_key) if api_key else ""),
     }
-    user_prompt = (user_prompt or "").strip()
-    api_key = (api_key or "").strip()
     if not user_prompt:
         return {**base, "error": "Prompt is required"}
     if not api_key:
         return {**base, "error": "API key is required"}
+    if provider and provider not in PROVIDERS:
+        return {
+            **base,
+            "error": (
+                f"Unknown provider {provider!r}; expected one of "
+                f"{', '.join(PROVIDERS)}"
+            ),
+        }
 
     lexemes = find_lexemes(user_prompt)
     base["lexemes_used"] = [e["lex"] for e in lexemes]
@@ -394,7 +451,15 @@ def generate_query(user_prompt, api_key, executor=None, max_attempts=MAX_ATTEMPT
         base["attempts"] = attempt
         prompt = build_prompt(user_prompt, lexemes, feedback_history)
         try:
-            query = strip_fences(call_llm(prompt, api_key))
+            query = strip_fences(
+                call_llm(
+                    prompt,
+                    api_key,
+                    provider=provider,
+                    model=model,
+                    base_url=base_url,
+                )
+            )
         except Exception as e:
             return {**base, "error": f"AI provider error: {e}"}
         if not query:

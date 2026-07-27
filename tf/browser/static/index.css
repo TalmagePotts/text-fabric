@@ -814,9 +814,11 @@ pre.chat-code {
 	cursor: pointer;
 }
 
-.chat-tool-head:hover {
-	background-color: var(--haze-back);
-	color: var(--paper-fore);
+@media (hover: hover) {
+	.chat-tool-head:hover {
+		background-color: var(--haze-back);
+		color: var(--paper-fore);
+	}
 }
 
 .chat-tool-icon {
@@ -846,6 +848,10 @@ pre.chat-code {
 
 .chat-tool-head.open .chat-tool-chevron {
 	transform: rotate(90deg);
+}
+
+.chat-tool-head.open {
+	background-color: var(--haze-back);
 }
 
 .chat-tool-detail {
@@ -914,9 +920,11 @@ button.chat-load {
 	cursor: pointer;
 }
 
-button.chat-load:hover {
-	background-color: var(--fog-back);
-	color: var(--dark-fore);
+@media (hover: hover) {
+	button.chat-load:hover {
+		background-color: var(--fog-back);
+		color: var(--dark-fore);
+	}
 }
 
 /* Composer */
@@ -998,9 +1006,11 @@ button.chat-suggestion {
 	cursor: pointer;
 }
 
-button.chat-suggestion:hover {
-	background-color: var(--haze-back);
-	color: var(--paper-fore);
+@media (hover: hover) {
+	button.chat-suggestion:hover {
+		background-color: var(--haze-back);
+		color: var(--paper-fore);
+	}
 }
 
 /* ==========================================================================

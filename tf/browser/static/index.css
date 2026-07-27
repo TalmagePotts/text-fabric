@@ -168,8 +168,24 @@ div.rightcolx {
    #sidebarcont unconditionally would shrink the work area for every tab.
    :has() lets the widening apply only while the chat tab is open. */
 #sidebarcont:has(>div[status=chat].active) {
-	max-width: 40vw;
-	width: 40vw;
+	max-width: 36vw;
+	width: 36vw;
+}
+
+/* The columns are sized to their content and never shrink (leftcol is
+   flex: 1 0 auto), so claiming a third of the width for the chat would
+   push the page wider than the viewport. While the chat is open, let
+   them give ground instead. */
+div.page:has(#sidebarcont>div[status=chat].active) div.leftcol,
+div.page:has(#sidebarcont>div[status=chat].active) div.midcol {
+	flex-shrink: 1;
+	min-width: 0;
+}
+
+div.page:has(#sidebarcont>div[status=chat].active) div.rightcolx,
+div.page:has(#sidebarcont>div[status=chat].active) div.rightcol {
+	flex-shrink: 1;
+	min-width: 16vw;
 }
 
 #sidebarcont>div[status=chat].active {

@@ -658,6 +658,11 @@ button#generateQuery:disabled {
 		margin: 0;
 	}
 
+	/* The sidebar is sticky; keep anchored scrolling clear of it. */
+	html {
+		scroll-padding-top: 3.2rem;
+	}
+
 	div.page {
 		flex-flow: column nowrap;
 		align-items: stretch;
@@ -769,6 +774,8 @@ button#generateQuery:disabled {
 	/* Touch targets and no-zoom font sizes. */
 	textarea.query,
 	textarea.ai-prompt,
+	textarea.sections,
+	textarea.tuples,
 	input.api-key,
 	input.ai-model,
 	input.ai-baseurl,
@@ -776,6 +783,59 @@ button#generateQuery:disabled {
 		font-size: 16px;
 		width: 100%;
 		box-sizing: border-box;
+		margin-left: 0;
+		margin-right: 0;
+	}
+
+	/* The desktop heights (20rem for the search pad) eat a whole phone
+	   screen; they stay resizable by drag. */
+	textarea.query {
+		height: 10rem;
+	}
+
+	textarea.tuples,
+	textarea.sections {
+		height: 3.5rem;
+	}
+
+	/* Control rows that are single-line on desktop must wrap, not clip. */
+	div.cline,
+	div.tfline,
+	div.passages,
+	div.materialnav,
+	#pages,
+	#nresults {
+		flex-flow: row wrap;
+	}
+
+	/* Job toolbar: buttons wrap and the job selector takes its own row
+	   instead of pushing the last buttons off screen. */
+	#jobs {
+		display: flex;
+		flex-flow: row wrap;
+		align-items: center;
+		gap: 4px;
+		padding: 4px;
+	}
+
+	#jobs>button {
+		flex: 0 0 auto;
+		min-width: 44px;
+	}
+
+	#jobs>select.selinp {
+		flex: 1 1 100%;
+		order: -1;
+		font-size: 16px;
+		min-height: 44px;
+		max-width: 100%;
+	}
+
+	div.materialnav,
+	#navigation {
+		max-width: 100%;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	button,
@@ -837,4 +897,18 @@ button#generateQuery:disabled {
 		padding: 0 0.4rem;
 		font-size: small;
 	}
+}
+
+/* Advanced AI settings (model / custom endpoint), collapsed by default. */
+details.ai-advanced {
+	margin: 4px 6px;
+}
+
+details.ai-advanced summary {
+	cursor: pointer;
+	padding: 4px 2px;
+}
+
+details.ai-advanced summary:hover {
+	background-color: var(--fog-back);
 }

@@ -1004,11 +1004,10 @@ const initAIQueryGenerator = () => {
         )
       }
     } else {
+      /* The helper link already prompts for a key; no status line too. */
       apiKeyHelper.show()
       if (announce) {
-        aiStatus.html(
-          `<span class="info">🔑 Enter a ${spec.label} API key to continue</span>`
-        )
+        aiStatus.html("")
       }
     }
     console.log(`[AI] provider=${provider} hasKey=${!!key}`)

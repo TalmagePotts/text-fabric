@@ -424,16 +424,21 @@
 						</label>
 						<input type="password" id="apiKey" class="api-key" placeholder="Gemini API Key"
 							title="Your API key for the selected provider (saved per provider in this browser)" />
-						<button type="button" id="clearApiKey" class="small"
-							title="Clear saved API key from browser">Clear Key</button>
+					</div>
+					<details id="aiAdvanced" class="ai-advanced">
+						<summary><span class="ilab">⚙ Advanced</span></summary>
+						<div class="ai-controls">
+							<input type="text" id="aiModel" class="ai-model" placeholder="Model (optional)"
+								title="Model id to use; leave blank for the recommended default" />
+							<input type="text" id="aiBaseUrl" class="ai-baseurl" placeholder="API base URL (optional)"
+								title="Custom API endpoint, e.g. a proxy or gateway; leave blank for the provider default" />
+						</div>
+					</details>
+					<div class="ai-controls">
 						<button type="button" id="generateQuery" class="medium active"
 							title="Generate Text-Fabric query from natural language (Ctrl+Enter)">Generate Query</button>
-					</div>
-					<div class="ai-controls">
-						<input type="text" id="aiModel" class="ai-model" placeholder="Model (optional)"
-							title="Model id to use; leave blank for the recommended default" />
-						<input type="text" id="aiBaseUrl" class="ai-baseurl" placeholder="API base URL (optional)"
-							title="Custom API endpoint, e.g. a proxy or gateway; leave blank for the provider default" />
+						<button type="button" id="clearApiKey" class="small"
+							title="Clear saved API key from browser">Clear Key</button>
 					</div>
 					<p class="ai-help">💾 Your settings are saved per provider in your browser and auto-load next time.
 						Press <b>Ctrl+Enter</b> in the box above to generate.

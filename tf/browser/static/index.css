@@ -779,6 +779,27 @@ button#generateQuery:disabled {
 	border-radius: 3px;
 }
 
+/* The agent's basis-and-limits note: visible as a caveat without
+   shouting over the answer itself. */
+blockquote.chat-caveat {
+	margin: 10px 0 4px 0;
+	padding: 6px 10px;
+	border-left: 3px solid var(--blue-haze-fore);
+	background-color: var(--blue-haze-back);
+	border-radius: 0 4px 4px 0;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--fog-fore);
+}
+
+blockquote.chat-caveat p {
+	margin: 0;
+}
+
+blockquote.chat-caveat p + p {
+	margin-top: 4px;
+}
+
 pre.chat-code {
 	background-color: var(--haze-back);
 	border-radius: 4px;

@@ -1201,10 +1201,17 @@ const chatMarkdown = text => {
   const out = []
   let inList = false
   let inCode = false
+  let inQuote = false
   const closeList = () => {
     if (inList) {
       out.push("</ul>")
       inList = false
+    }
+  }
+  const closeQuote = () => {
+    if (inQuote) {
+      out.push("</blockquote>")
+      inQuote = false
     }
   }
   for (const line of lines) {
@@ -1223,6 +1230,19 @@ const chatMarkdown = text => {
       out.push(line + "\n")
       continue
     }
+    /* The agent puts its basis-and-limits note in a blockquote, which is
+     * styled as a callout so the caveat is not lost in the prose. */
+    const quote = line.match(/^\s*&gt;\s?(.*)$/)
+    if (quote) {
+      closeList()
+      if (!inQuote) {
+        out.push("<blockquote class='chat-caveat'>")
+        inQuote = true
+      }
+      out.push(`<p>${quote[1]}</p>`)
+      continue
+    }
+    closeQuote()
     const heading = line.match(/^(#{1,4})\s+(.*)$/)
     if (heading) {
       closeList()
@@ -1250,6 +1270,7 @@ const chatMarkdown = text => {
     out.push("</code></pre>")
   }
   closeList()
+  closeQuote()
   return out
     .join("")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")

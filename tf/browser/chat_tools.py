@@ -172,15 +172,34 @@ def run_query(app, template, limit=SAMPLE_CAP):
                 }
             )
 
+    detail = {
+        "template": template,
+        "total": total,
+        "showing": len(sample),
+        "sample": sample,
+    }
+    if total == 0:
+        # Absence of results is not evidence of absence in the text until
+        # the query itself has been checked; say so where the model reads
+        # it, rather than relying on it to remember.
+        detail["warning"] = (
+            "0 results. This means the construction does not occur ONLY if "
+            "this query expresses it correctly. Every feature value here is "
+            "valid, but a valid value can still be the wrong one, and the "
+            "structure (containment levels, word order, node types) may not "
+            "capture what you meant. Verify before reporting absence as a "
+            "finding."
+        )
+    elif total > len(sample):
+        detail["note"] = (
+            f"Showing {len(sample)} of {total}. The sample is not evidence "
+            f"about proportions — use `aggregate` for that."
+        )
+
     return {
         "ok": True,
         "summary": f"{total} result{'' if total == 1 else 's'}",
-        "detail": {
-            "template": template,
-            "total": total,
-            "showing": len(sample),
-            "sample": sample,
-        },
+        "detail": detail,
     }
 
 

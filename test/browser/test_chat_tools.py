@@ -185,3 +185,25 @@ class TestTools:
             assert not r["ok"] and "kaboom" in r["detail"]["error"]
         finally:
             del chat_tools.TOOLS["_boom"]
+
+
+@needs_corpus
+class TestAmbiguityWarnings:
+    """0 results must not read as 'this never occurs'."""
+
+    def test_zero_results_carries_a_warning(self):
+        # Valid values, valid syntax, genuinely no matches.
+        r = chat_tools.run_query(get_app(), "word lex=JHWH/ sp=adjv")
+        assert r["ok"] and r["detail"]["total"] == 0
+        warning = r["detail"]["warning"]
+        assert "ONLY if" in warning
+        assert "wrong one" in warning
+
+    def test_truncated_sample_says_it_is_not_proportions(self):
+        r = chat_tools.run_query(get_app(), BETWEEN_QUERY)
+        assert r["detail"]["total"] > r["detail"]["showing"]
+        assert "aggregate" in r["detail"]["note"]
+
+    def test_no_warning_when_everything_is_shown(self):
+        r = chat_tools.run_query(get_app(), "word lex=JHWH/ sp=adjv|nega")
+        assert "warning" in r["detail"] or "note" not in r["detail"]

@@ -230,3 +230,42 @@ def test_tool_schemas_wellformed():
     from tf.browser import chat_tools
 
     assert names == set(chat_tools.TOOLS), "schemas and implementations disagree"
+
+
+class TestEpistemicHonesty:
+    """The prompt must actually carry the limits guidance.
+
+    These are cheap guards against someone trimming the system prompt
+    later and quietly losing the "say what you could not establish"
+    behaviour, which is invisible until an answer is confidently wrong.
+    """
+
+    def test_names_what_the_corpus_cannot_settle(self):
+        prompt = chat_agent.SYSTEM_PROMPT.lower()
+        for topic in (
+            "meaning",
+            "dating",
+            "text critic",
+            "etymolog",
+            "coreference",
+            "intertextual",
+            "cantillation",
+        ):
+            assert topic in prompt, f"prompt no longer mentions {topic}"
+
+    def test_requires_marking_inference_vs_count(self):
+        prompt = chat_agent.SYSTEM_PROMPT.lower()
+        assert "inference" in prompt
+        assert "guess" in prompt
+        assert "epistemic status" in prompt
+
+    def test_warns_that_zero_results_is_ambiguous(self):
+        assert "zero results is ambiguous" in chat_agent.SYSTEM_PROMPT.lower()
+
+    def test_asks_for_the_caveat_blockquote(self):
+        assert "> " in chat_agent.SYSTEM_PROMPT
+        assert "blockquote" in chat_agent.SYSTEM_PROMPT.lower()
+
+    def test_says_etcbc_analysis_is_a_model_not_fact(self):
+        prompt = chat_agent.SYSTEM_PROMPT.lower()
+        assert "one linguistic model" in prompt or "not neutral" in prompt

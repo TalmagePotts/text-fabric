@@ -90,14 +90,66 @@ def search_lexemes(term, max_results=8):
                 word.append(e)
             elif tl in gloss:
                 sub.append(e)
-    results = []
-    seen = set()
-    for bucket in (exact, word, sub):
-        for e in sorted(bucket, key=lambda x: -x["freq"]):
-            key = (e["lex"], e["lang"])
-            if key not in seen:
-                seen.add(key)
-                results.append(e)
+    # Group by lex string.  The same transliteration can be several
+    # dictionary entries — BJN/ is Hebrew "interval" (407x) and Aramaic
+    # "between" (2x) — and since a query can only say `lex=BJN/`, showing
+    # them separately invites picking the rare homograph and reasoning
+    # about the wrong word.  One row per lex, frequency summed, all
+    # glosses listed.
+    byLex = {}
+    for rank, bucket in enumerate((exact, word, sub)):
+        for e in bucket:
+            entry = byLex.get(e["lex"])
+            if entry is None:
+                byLex[e["lex"]] = {
+                    "lex": e["lex"],
+                    "sp": e["sp"],
+                    "gloss": e["gloss"],
+                    "voc": e["voc"],
+                    "freq": 0,
+                    "lang": e["lang"],
+                    "glosses": [],
+                    "languages": [],
+                    "_rank": rank,
+                }
+                entry = byLex[e["lex"]]
+            entry["_rank"] = min(entry["_rank"], rank)
+            # The dominant sense supplies the headline gloss/vocalization.
+            if e["freq"] > entry["freq"] and entry["glosses"]:
+                entry["gloss"] = e["gloss"]
+                entry["voc"] = e["voc"]
+                entry["sp"] = e["sp"]
+                entry["lang"] = e["lang"]
+            if not entry["glosses"]:
+                entry["gloss"] = e["gloss"]
+            entry["freq"] += e["freq"]
+            if e["gloss"] and e["gloss"] not in entry["glosses"]:
+                entry["glosses"].append(e["gloss"])
+            if e["lang"] and e["lang"] not in entry["languages"]:
+                entry["languages"].append(e["lang"])
+
+    # Pull in the other senses of a matched lex, so the summed frequency
+    # reflects the whole lexeme rather than only the senses that matched.
+    for lex, entry in byLex.items():
+        for e in data["lexemes"]:
+            if e["lex"] != lex:
+                continue
+            if e["gloss"] in entry["glosses"] and e["lang"] in entry["languages"]:
+                continue
+            entry["freq"] += e["freq"]
+            if e["gloss"] and e["gloss"] not in entry["glosses"]:
+                entry["glosses"].append(e["gloss"])
+            if e["lang"] and e["lang"] not in entry["languages"]:
+                entry["languages"].append(e["lang"])
+            if e["freq"] > 0 and e["freq"] >= entry["freq"] - e["freq"]:
+                # A dominant unmatched sense should still supply the label.
+                entry["gloss"] = e["gloss"]
+                entry["voc"] = e["voc"]
+                entry["sp"] = e["sp"]
+
+    results = sorted(byLex.values(), key=lambda x: (x["_rank"], -x["freq"]))
+    for entry in results:
+        entry.pop("_rank", None)
     return results[:max_results]
 
 

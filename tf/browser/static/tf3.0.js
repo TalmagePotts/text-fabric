@@ -941,6 +941,7 @@ $(window).on("load", () => {
   jobOptions()
   jobControls()
   initAIQueryGenerator()
+  initChat()
 })
 
 /* AI Query Generator
@@ -1170,6 +1171,403 @@ const initAIQueryGenerator = () => {
     if ((e.ctrlKey || e.metaKey) && e.key == "Enter") {
       e.preventDefault()
       runGeneration()
+    }
+  })
+}
+
+/* Research chat
+ *
+ * Streams an agent turn from /ai/chat as server-sent events, rendering
+ * each Text-Fabric tool call as a collapsible row so every search behind
+ * an answer is inspectable — and loadable straight into the search pad.
+ */
+
+const CHAT_CONV_STORAGE = "tf_chat_conv_id"
+
+const chatEscape = text =>
+  String(text == null ? "" : text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+
+/* Deliberately small markdown subset: enough for the agent's answers
+ * (bold, code, headings, lists, paragraphs) without pulling in a library.
+ * Everything is escaped first, so this never renders raw HTML.
+ */
+const chatMarkdown = text => {
+  const escaped = chatEscape(text)
+  const lines = escaped.split("\n")
+  const out = []
+  let inList = false
+  let inCode = false
+  const closeList = () => {
+    if (inList) {
+      out.push("</ul>")
+      inList = false
+    }
+  }
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      if (inCode) {
+        out.push("</code></pre>")
+        inCode = false
+      } else {
+        closeList()
+        out.push("<pre class='chat-code'><code>")
+        inCode = true
+      }
+      continue
+    }
+    if (inCode) {
+      out.push(line + "\n")
+      continue
+    }
+    const heading = line.match(/^(#{1,4})\s+(.*)$/)
+    if (heading) {
+      closeList()
+      const level = Math.min(6, heading[1].length + 2)
+      out.push(`<h${level}>${heading[2]}</h${level}>`)
+      continue
+    }
+    const item = line.match(/^\s*[-*]\s+(.*)$/)
+    if (item) {
+      if (!inList) {
+        out.push("<ul>")
+        inList = true
+      }
+      out.push(`<li>${item[1]}</li>`)
+      continue
+    }
+    if (!line.trim()) {
+      closeList()
+      continue
+    }
+    closeList()
+    out.push(`<p>${line}</p>`)
+  }
+  if (inCode) {
+    out.push("</code></pre>")
+  }
+  closeList()
+  return out
+    .join("")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+}
+
+const initChat = () => {
+  const panel = $("#chatPanel")
+  if (!panel.length) {
+    return
+  }
+  const messages = $("#chatMessages")
+  const input = $("#chatInput")
+  const sendBtn = $("#chatSend")
+  const stopBtn = $("#chatStop")
+  const resetBtn = $("#chatReset")
+  const status = $("#chatStatus")
+  const empty = $("#chatEmpty")
+
+  let convId = localStorage.getItem(CHAT_CONV_STORAGE)
+  if (!convId) {
+    convId = `c${Date.now()}${Math.floor(Math.random() * 1e6)}`
+    localStorage.setItem(CHAT_CONV_STORAGE, convId)
+  }
+  let controller = null
+
+  /* Only follow the tail when the user is already at the bottom, so
+   * scrolling back through a long answer is not yanked away.
+   */
+  const nearBottom = () => {
+    const el = messages.get(0)
+    if (!el) {
+      return true
+    }
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+  const scrollToEnd = force => {
+    const el = messages.get(0)
+    if (el && (force || nearBottom())) {
+      el.scrollTop = el.scrollHeight
+    }
+  }
+
+  const addBubble = (role, html) => {
+    empty.hide()
+    const bubble = $(
+      `<div class="chat-msg chat-${role}"><div class="chat-body"></div></div>`
+    )
+    bubble.find(".chat-body").html(html)
+    messages.append(bubble)
+    scrollToEnd(role == "user")
+    return bubble
+  }
+
+  const setBusy = busy => {
+    sendBtn.prop("disabled", busy)
+    sendBtn.html(busy ? '<span class="fa fa-spinner fa-spin"></span> Working' : "Ask")
+    stopBtn.toggle(busy)
+    input.prop("disabled", busy)
+  }
+
+  /* One tool call: a collapsed status line that expands to show the
+   * inputs and the outcome, plus a button to run the query in the pad.
+   */
+  const addToolRow = event => {
+    empty.hide()
+    const row = $('<div class="chat-tool" data-tool-id=""></div>')
+    row.attr("data-tool-id", event.id)
+    const head = $(
+      `<button type="button" class="chat-tool-head" aria-expanded="false">
+         <span class="chat-tool-icon">⏳</span>
+         <span class="chat-tool-title"></span>
+         <span class="chat-tool-count"></span>
+         <span class="chat-tool-chevron">›</span>
+       </button>`
+    )
+    head.find(".chat-tool-title").text(event.title || event.name)
+    const detail = $('<div class="chat-tool-detail" hidden></div>')
+    for (const field of event.inputs || []) {
+      const line = $('<div class="chat-tool-field"></div>')
+      line.append($('<span class="chat-tool-label"></span>').text(`${field.label}: `))
+      if (field.label == "Query") {
+        line.append($('<pre class="chat-tool-query"></pre>').text(field.value))
+      } else {
+        line.append($("<span></span>").text(field.value))
+      }
+      detail.append(line)
+    }
+    head.off("click").click(() => {
+      const open = detail.prop("hidden")
+      detail.prop("hidden", !open)
+      head.attr("aria-expanded", open ? "true" : "false")
+      head.toggleClass("open", open)
+      scrollToEnd()
+    })
+    row.append(head).append(detail)
+    messages.append(row)
+    scrollToEnd()
+    return row
+  }
+
+  const completeToolRow = event => {
+    const row = messages.find(`.chat-tool[data-tool-id="${event.id}"]`).last()
+    if (!row.length) {
+      return
+    }
+    row.find(".chat-tool-icon").text(event.ok ? "✓" : "✕")
+    row.toggleClass("failed", !event.ok)
+    row.find(".chat-tool-count").text(event.summary || "")
+    const detail = row.find(".chat-tool-detail")
+    const outcome = $('<div class="chat-tool-outcome"></div>')
+    outcome.toggleClass("error", !event.ok)
+    outcome.text(event.summary || "")
+    detail.append(outcome)
+
+    const rows = ((event.detail || {}).sample || []).slice(0, 6)
+    if (rows.length) {
+      const list = $('<div class="chat-tool-sample"></div>')
+      for (const r of rows) {
+        const line = $('<div class="chat-tool-row"></div>')
+        line.append($('<span class="chat-ref"></span>').text(r.ref || ""))
+        line.append($('<span class="chat-heb"></span>').text((r.words || []).slice(1).join(" ")))
+        list.append(line)
+      }
+      detail.append(list)
+    }
+    const buckets = ((event.detail || {}).buckets || []).slice(0, 10)
+    if (buckets.length) {
+      const list = $('<div class="chat-tool-sample"></div>')
+      for (const b of buckets) {
+        list.append(
+          $('<div class="chat-tool-row"></div>').text(
+            `${b.value} — ${b.count} (${b.percent}%)`
+          )
+        )
+      }
+      detail.append(list)
+    }
+    const errors = (event.detail || {}).errors
+    if (errors) {
+      detail.append($('<div class="chat-tool-outcome error"></div>').text(errors))
+    }
+
+    if (event.template) {
+      const load = $(
+        '<button type="button" class="small chat-load">Load into search pad</button>'
+      )
+      load.off("click").click(() => {
+        $("#query").val(event.template)
+        storeForm()
+        getTable("query", "results", "results")
+        status.text("Loaded into the search pad")
+        const pad = $("#query").get(0)
+        if (pad && pad.scrollIntoView) {
+          pad.scrollIntoView({ block: "center", behavior: "smooth" })
+        }
+      })
+      detail.append(load)
+    }
+  }
+
+  const providerSettings = () => {
+    const provider = localStorage.getItem(AI_PROVIDER_STORAGE) || "gemini"
+    const spec = AI_PROVIDERS[provider]
+    return {
+      provider,
+      api_key: localStorage.getItem(spec.storage) || "",
+      model: localStorage.getItem(aiSettingKey(provider, "model")) || "",
+      base_url: localStorage.getItem(aiSettingKey(provider, "baseurl")) || "",
+    }
+  }
+
+  const ask = async question => {
+    const settings = providerSettings()
+    if (!settings.api_key) {
+      status.html(
+        '<span class="error">Enter an API key in the AI Query Generator first</span>'
+      )
+      return
+    }
+    addBubble("user", chatEscape(question))
+    input.val("")
+    setBusy(true)
+    status.text("Thinking…")
+    console.log(`[chat] asking via ${settings.provider}: ${question}`)
+
+    controller = new AbortController()
+    let answerBubble = null
+    try {
+      const response = await fetch("/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, conv_id: convId, ...settings }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        let message = `HTTP ${response.status}`
+        try {
+          const data = await response.json()
+          message = data.error || message
+        } catch (e) {
+          /* non-JSON error body */
+        }
+        status.html(`<span class="error">${chatEscape(message)}</span>`)
+        return
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) {
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split("\n\n")
+        buffer = chunks.pop()
+        for (const chunk of chunks) {
+          const line = chunk.trim()
+          if (!line.startsWith("data:")) {
+            continue
+          }
+          let event
+          try {
+            event = JSON.parse(line.slice(5).trim())
+          } catch (e) {
+            console.warn("[chat] bad event", line)
+            continue
+          }
+          console.log("[chat] event", event)
+          if (event.type == "status") {
+            status.text(event.phase == "thinking" ? "Thinking…" : event.phase)
+          } else if (event.type == "tool_call") {
+            status.text("Searching the corpus…")
+            addToolRow(event)
+          } else if (event.type == "tool_result") {
+            completeToolRow(event)
+          } else if (event.type == "note") {
+            addBubble("note", chatMarkdown(event.text))
+          } else if (event.type == "text") {
+            answerBubble = addBubble("assistant", chatMarkdown(event.delta))
+          } else if (event.type == "error") {
+            status.html(`<span class="error">${chatEscape(event.message)}</span>`)
+          } else if (event.type == "done") {
+            const calls = event.tool_calls
+            status.text(
+              `${calls} search${calls == 1 ? "" : "es"} · ${event.seconds}s · ${event.provider}`
+            )
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name == "AbortError") {
+        status.text("Stopped")
+      } else {
+        status.html(`<span class="error">${chatEscape(e.message)}</span>`)
+      }
+    } finally {
+      controller = null
+      setBusy(false)
+      if (answerBubble) {
+        scrollToEnd()
+      }
+    }
+  }
+
+  const submit = () => {
+    const question = input.val().trim()
+    if (!question) {
+      input.focus()
+      return
+    }
+    ask(question)
+  }
+
+  sendBtn.off("click").click(e => {
+    e.preventDefault()
+    submit()
+  })
+
+  stopBtn.off("click").click(e => {
+    e.preventDefault()
+    if (controller) {
+      controller.abort()
+    }
+  })
+
+  /* Enter sends, Shift+Enter makes a newline. */
+  input.off("keydown").on("keydown", e => {
+    if (e.key == "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      submit()
+    }
+  })
+
+  $(".chat-suggestion")
+    .off("click")
+    .click(e => {
+      e.preventDefault()
+      ask($(e.currentTarget).text().trim())
+    })
+
+  resetBtn.off("click").click(async e => {
+    e.preventDefault()
+    const previous = convId
+    convId = `c${Date.now()}${Math.floor(Math.random() * 1e6)}`
+    localStorage.setItem(CHAT_CONV_STORAGE, convId)
+    messages.find(".chat-msg, .chat-tool").remove()
+    empty.show()
+    status.text("")
+    try {
+      await fetch("/ai/chat/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conv_id: previous }),
+      })
+    } catch (err) {
+      /* the server forgets on restart anyway */
     }
   })
 }

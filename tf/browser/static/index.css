@@ -599,8 +599,10 @@ button#generateQuery {
 	flex: 0 0 auto;
 	font-size: medium;
 	padding: 8px 16px;
-	background-color: var(--blue-haze-back);
-	color: var(--dark-fore);
+	/* --dark-fore is white and --blue-haze-back is 97% white, so the
+	   original pairing rendered the label invisible. */
+	background-color: var(--blue-haze-fore);
+	color: var(--button-fore);
 	border: 2px solid var(--blue-haze-fore);
 	border-radius: 6px;
 	cursor: pointer;
@@ -608,7 +610,8 @@ button#generateQuery {
 }
 
 button#generateQuery:hover:not(:disabled) {
-	background-color: var(--marine-haze-back);
+	background-color: var(--blue-haze-back);
+	color: var(--blue-haze-fore);
 }
 
 button#generateQuery:disabled {

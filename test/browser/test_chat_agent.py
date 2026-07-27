@@ -308,3 +308,144 @@ class TestConfigurableBudget:
         patched["install"](script, tool=ok_tool)
         events = call(max_tool_calls=30)
         assert len([e for e in events if e["type"] == "tool_call"]) == 30
+
+
+class TestContextContinuity:
+    """The complaint that prompted this: 'it doesn't have the context of
+    my previous messages'."""
+
+    def test_context_carries_between_turns(self, patched):
+        adapter = patched["install"]([("a1", []), ("a2", [])])
+        call(question="first question", conv_id="c-ctx")
+        call(question="second question", conv_id="c-ctx")
+        secondTurn = adapter.seen[1]
+        assert any("first question" in str(m) for m in secondTurn)
+        assert any("a1" in str(m) for m in secondTurn)
+
+    def test_separate_conversations_do_not_bleed(self, patched):
+        adapter = patched["install"]([("a1", []), ("a2", [])])
+        call(question="alpha", conv_id="c-a")
+        call(question="beta", conv_id="c-b")
+        assert not any("alpha" in str(m) for m in adapter.seen[1])
+
+    def test_transcript_rebuilds_context_after_a_restart(self, patched):
+        """Server memory is per-process; a restart must not silently
+        drop the thread when the browser still has the transcript."""
+        adapter = patched["install"]([("answer", [])])
+        chat_agent.reset_conversation("c-restart")  # simulate restart
+        events = call(
+            question="and what about the plural?",
+            conv_id="c-restart",
+            transcript=[
+                {"role": "user", "text": "how is MLK/ used?"},
+                {"role": "assistant", "text": "It occurs 2703 times."},
+            ],
+        )
+        firstTurn = adapter.seen[0]
+        assert any("MLK/" in str(m) for m in firstTurn), firstTurn
+        assert any("2703" in str(m) for m in firstTurn)
+        assert any(
+            e["type"] == "status" and e.get("phase") == "restored context"
+            for e in events
+        )
+
+    def test_stored_history_wins_over_transcript(self, patched):
+        adapter = patched["install"]([("a1", []), ("a2", [])])
+        call(question="real question", conv_id="c-both")
+        call(
+            question="follow up",
+            conv_id="c-both",
+            transcript=[{"role": "user", "text": "stale browser copy"}],
+        )
+        assert not any("stale browser copy" in str(m) for m in adapter.seen[1])
+
+    def test_rebuild_starts_with_a_user_turn(self):
+        rebuilt = chat_agent.rebuild_history(
+            "claude",
+            [
+                {"role": "assistant", "text": "dangling reply"},
+                {"role": "user", "text": "q"},
+                {"role": "assistant", "text": "a"},
+            ],
+        )
+        assert rebuilt[0]["role"] == "user"
+
+    def test_rebuild_ignores_junk(self):
+        assert chat_agent.rebuild_history("claude", None) == []
+        assert chat_agent.rebuild_history("claude", ["nonsense", 42]) == []
+        assert chat_agent.rebuild_history(
+            "claude", [{"role": "user", "text": "   "}]
+        ) == []
+
+    def test_rebuild_gemini_shape(self):
+        rebuilt = chat_agent.rebuild_history(
+            "gemini",
+            [{"role": "user", "text": "q"}, {"role": "assistant", "text": "a"}],
+        )
+        assert rebuilt[0]["role"] == "user" and "parts" in rebuilt[0]
+        assert rebuilt[1]["role"] == "model"
+
+    def test_dangling_tool_calls_are_never_stored(self):
+        """An interrupted turn must not poison the next question."""
+        messages = [
+            {"role": "user", "content": "q"},
+            {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": "1", "name": "x"}],
+            },
+        ]
+        chat_agent.set_history("c-dangle", messages)
+        stored = chat_agent.get_history("c-dangle")
+        assert len(stored) == 1 and stored[0]["role"] == "user"
+
+    def test_aborted_turn_leaves_earlier_turns_intact(self, patched):
+        """Pressing Stop mid-question must not damage the conversation.
+
+        The abandoned turn itself is not kept — that is fine, it was
+        never answered — but everything before it has to survive, and
+        nothing half-finished may be stored.
+        """
+        patched["install"](
+            [
+                ("first answer", []),
+                ("", [{"id": "1", "name": "run_query", "arguments": {}}]),
+            ],
+            tool=ok_tool,
+        )
+        call(question="first question", conv_id="c-abort")
+
+        gen = chat_agent.run_turn(
+            app=object(), question="abandoned", api_key="k", conv_id="c-abort"
+        )
+        for event in gen:
+            if event["type"] == "tool_result":
+                break
+        gen.close()  # the user presses Stop
+
+        stored = chat_agent.get_history("c-abort")
+        assert any("first question" in str(m) for m in stored), stored
+        assert any("first answer" in str(m) for m in stored)
+        # nothing dangling was left behind
+        assert chat_agent._drop_dangling_tool_calls(list(stored)) == stored
+
+    def test_completed_tool_exchange_is_saved_mid_turn(self, patched):
+        """Once a tool call has its result, the exchange is durable."""
+        patched["install"](
+            [
+                ("", [{"id": "1", "name": "run_query", "arguments": {}}]),
+                ("done", []),
+            ],
+            tool=ok_tool,
+        )
+        gen = chat_agent.run_turn(
+            app=object(), question="q", api_key="k", conv_id="c-safe"
+        )
+        seenResult = False
+        for event in gen:
+            if event["type"] == "tool_result":
+                seenResult = True
+            elif seenResult and event["type"] == "status":
+                # the next model turn started, so the save has run
+                break
+        gen.close()
+        assert any("q" in str(m) for m in chat_agent.get_history("c-safe"))

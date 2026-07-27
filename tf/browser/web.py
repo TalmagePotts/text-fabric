@@ -332,6 +332,11 @@ def factory(web):
             maxToolCalls = MAX_TOOL_CALLS
         maxToolCalls = max(1, min(maxToolCalls, TOOL_CALL_CEILING))
 
+        # Used only when this process has no memory of the conversation.
+        transcript = data.get("transcript")
+        if not isinstance(transcript, list):
+            transcript = []
+
         if not apiKey:
             envVar = (
                 "ANTHROPIC_API_KEY" if provider == "claude" else "GEMINI_API_KEY"
@@ -371,6 +376,7 @@ def factory(web):
                     model=model,
                     base_url=baseUrl,
                     max_tool_calls=maxToolCalls,
+                    transcript=transcript,
                 ):
                     yield f"data: {jsonlib.dumps(event)}\n\n"
             except Exception as e:

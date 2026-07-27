@@ -1572,6 +1572,14 @@ const initChat = () => {
           question,
           conv_id: convId,
           max_tool_calls: readMaxTools(),
+          /* Fallback context: the server keeps its own conversation
+           * state, but it lives in memory and is lost when the service
+           * restarts. Sending the recent turns lets it pick the thread
+           * back up instead of silently forgetting. */
+          transcript: log
+            .filter(e => e.k == "user" || e.k == "assistant")
+            .slice(-12)
+            .map(e => ({ role: e.k, text: e.text })),
           ...settings,
         }),
         signal: controller.signal,

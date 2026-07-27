@@ -316,6 +316,9 @@ def get_history(conv_id):
 def set_history(conv_id, messages):
     if not conv_id:
         return
+    # Never store a turn whose tool calls were left unanswered; replaying
+    # one is an API error that would break the whole conversation.
+    messages = _drop_dangling_tool_calls(list(messages))
     _CONVERSATIONS[conv_id] = messages[-HISTORY_LIMIT:]
     _CONVERSATIONS.move_to_end(conv_id)
     while len(_CONVERSATIONS) > CONVERSATION_LIMIT:
@@ -484,6 +487,79 @@ def _user_message(provider, text):
     return {"role": "user", "content": text}
 
 
+def _assistant_message(provider, text):
+    if provider == "gemini":
+        return {"role": "model", "parts": [{"text": text}]}
+    return {"role": "assistant", "content": text}
+
+
+def rebuild_history(provider, transcript, limit=12):
+    """
+    Rebuild conversation context from the browser's transcript.
+
+    Server-side history lives in memory and does not survive a restart,
+    but the browser keeps the visible transcript.  When the server has
+    forgotten a conversation the client replays it here, so continuing an
+    older conversation still works.
+
+    Only the plain text of each turn is restored — tool calls are
+    deliberately dropped, since a tool_use block without its matching
+    tool_result is rejected by the API.  The model loses the detail of
+    how it answered before, but keeps the thread of the conversation.
+    """
+    messages = []
+    if not isinstance(transcript, list):
+        return messages
+    for entry in transcript[-limit:]:
+        if not isinstance(entry, dict):
+            continue
+        role = entry.get("role")
+        text = (entry.get("text") or "").strip()
+        if not text:
+            continue
+        if role == "user":
+            messages.append(_user_message(provider, text[:4000]))
+        elif role == "assistant":
+            messages.append(_assistant_message(provider, text[:4000]))
+    # Providers expect turns to alternate and to start with the user.
+    while messages and messages[0].get("role") != "user":
+        messages.pop(0)
+    return messages
+
+
+def _drop_dangling_tool_calls(messages):
+    """
+    Remove a trailing assistant turn whose tool calls were never answered.
+
+    If a turn is interrupted part-way — the user presses Stop, or the
+    provider errors between the request and the results — the stored
+    messages can end with tool calls that have no matching results.
+    Replaying that on the next question is an API error, so trim it
+    before saving.  Shape-based so it covers both providers.
+    """
+    while messages:
+        last = messages[-1]
+        role = last.get("role")
+        if role not in ("assistant", "model"):
+            break
+        content = last.get("content")
+        hasCalls = isinstance(content, list) and any(
+            isinstance(block, dict) and block.get("type") == "tool_use"
+            for block in content
+        )
+        if not hasCalls:
+            hasCalls = any(
+                getattr(part, "function_call", None)
+                for part in (last.get("parts") or [])
+                if not isinstance(part, dict)
+            )
+        if hasCalls:
+            messages.pop()
+            continue
+        break
+    return messages
+
+
 # ---------------------------------------------------------------------------
 # presentation helpers
 # ---------------------------------------------------------------------------
@@ -541,6 +617,7 @@ def run_turn(
     model="",
     base_url="",
     max_tool_calls=MAX_TOOL_CALLS,
+    transcript=None,
 ):
     """
     Answer one question, yielding events as the work happens.
@@ -574,6 +651,12 @@ def run_turn(
         return
 
     messages = list(get_history(conv_id))
+    if not messages and transcript:
+        # The server forgot this conversation (most likely it restarted);
+        # rebuild what context we can from the browser's transcript.
+        messages = rebuild_history(providerName, transcript)
+        if messages:
+            yield {"type": "status", "phase": "restored context"}
     messages.append(_user_message(providerName, question))
 
     toolCallCount = 0
@@ -653,6 +736,10 @@ def run_turn(
             yield event
 
         messages.append(adapter.tool_results(results))
+        # A safe point: every tool call now has its result. Save here so
+        # an interrupted turn (Stop, a dropped connection) still leaves
+        # the conversation intact for the next question.
+        set_history(conv_id, messages)
 
     if not answer:
         answer = (

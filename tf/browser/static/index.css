@@ -484,6 +484,11 @@ details.ai-generator {
 	padding: 8px;
 	margin: 10px 6px;
 	background-color: var(--haze-back);
+	/* The left column is flex:1 0 auto, so it sizes to max-content and
+	   cannot shrink: an unbounded panel here stretches the whole column
+	   (and the page) to fit the help text on one line. */
+	max-width: 32rem;
+	box-sizing: border-box;
 }
 
 details.ai-generator summary {
@@ -849,6 +854,11 @@ button#generateQuery:disabled {
 
 	button.xl {
 		min-width: 44px;
+	}
+
+	details.ai-generator {
+		max-width: 100%;
+		margin: 8px 4px;
 	}
 
 	/* AI section: one control per row, provider + key first. */

@@ -298,6 +298,117 @@ def factory(web):
                 'error': f'Server error: {str(e)}'
             }), 500
 
+    @app.route("/ai/chat", methods=["POST"])
+    def serveAIChat():
+        """Research chat: stream an agent turn as server-sent events.
+
+        The agent calls Text-Fabric as a tool against the corpus already
+        loaded in this process, so tool calls appear in the page as they
+        happen instead of the user watching a spinner for a minute.
+        """
+        import json as jsonlib
+        import os
+
+        from flask import Response, jsonify, request, stream_with_context
+
+        try:
+            from .chat_agent import MAX_TOOL_CALLS, TOOL_CALL_CEILING, run_turn
+        except Exception as e:
+            return jsonify({"error": f"Chat module failed to load: {e}"}), 500
+
+        data = request.get_json(silent=True) or {}
+        question = (data.get("question") or "").strip()
+        convId = (data.get("conv_id") or "").strip()
+        provider = (data.get("provider") or "").strip().lower()
+        model = (data.get("model") or "").strip()
+        baseUrl = (data.get("base_url") or "").strip()
+        apiKey = (data.get("api_key") or "").strip()
+
+        # The client chooses the research budget; clamp it here so a
+        # malformed or over-eager value cannot start a runaway loop.
+        try:
+            maxToolCalls = int(data.get("max_tool_calls") or MAX_TOOL_CALLS)
+        except (TypeError, ValueError):
+            maxToolCalls = MAX_TOOL_CALLS
+        maxToolCalls = max(1, min(maxToolCalls, TOOL_CALL_CEILING))
+
+        # Used only when this process has no memory of the conversation.
+        transcript = data.get("transcript")
+        if not isinstance(transcript, list):
+            transcript = []
+
+        if not apiKey:
+            envVar = (
+                "ANTHROPIC_API_KEY" if provider == "claude" else "GEMINI_API_KEY"
+            )
+            apiKey = os.environ.get(envVar, "").strip()
+            if not apiKey and not provider:
+                apiKey = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+
+        if not question:
+            return jsonify({"error": "Question is required"}), 400
+        if not apiKey:
+            envVar = (
+                "ANTHROPIC_API_KEY" if provider == "claude" else "GEMINI_API_KEY"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "API key is required. Either enter it in the UI "
+                            f"or set the {envVar} environment variable."
+                        )
+                    }
+                ),
+                400,
+            )
+
+        tfApp = web.kernelApi.app
+
+        def generate():
+            try:
+                for event in run_turn(
+                    tfApp,
+                    question,
+                    apiKey,
+                    conv_id=convId,
+                    provider=provider,
+                    model=model,
+                    base_url=baseUrl,
+                    max_tool_calls=maxToolCalls,
+                    transcript=transcript,
+                ):
+                    yield f"data: {jsonlib.dumps(event)}\n\n"
+            except Exception as e:
+                yield (
+                    "data: "
+                    + jsonlib.dumps({"type": "error", "message": f"Server error: {e}"})
+                    + "\n\n"
+                )
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                # Proxies that buffer would defeat the point of streaming.
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.route("/ai/chat/reset", methods=["POST"])
+    def serveAIChatReset():
+        """Forget a conversation's history."""
+        from flask import jsonify, request
+
+        try:
+            from .chat_agent import reset_conversation
+        except Exception as e:
+            return jsonify({"error": f"Chat module failed to load: {e}"}), 500
+        data = request.get_json(silent=True) or {}
+        reset_conversation((data.get("conv_id") or "").strip())
+        return jsonify({"ok": True}), 200
+
     @app.route("/", methods=["GET", "POST"])
     @app.route("/<path:anything>", methods=["GET", "POST"])
     def serveAllX(anything=None):

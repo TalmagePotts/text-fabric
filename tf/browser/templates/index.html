@@ -29,6 +29,9 @@
 				<div status="about">
 					<a href="#"><img class="icon" src="/browser/static/icon.png" /></a>
 				</div>
+				<div status="chat">
+					<a href="#">Chat</a>
+				</div>
 				<div status="help">
 					<a href="#">Help</a>
 				</div>
@@ -44,6 +47,47 @@
 			</div>
 			<div id="sidebarcont">
 				<input type="hidden" id="side" name="side" value="{{side}}" />
+				<div status="chat">
+					<div id="chatPanel">
+						<div id="chatHeader">
+							<span class="ilab">🔎 Research chat</span>
+							<span class="chat-header-controls">
+								<label class="chat-depth"
+									title="How many corpus searches the agent may run per question. Higher answers harder questions but costs more time and API usage.">
+									searches
+									<input type="number" id="chatMaxTools" min="1" max="40" step="1" value="10" />
+								</label>
+								<button type="button" id="chatReset" class="small"
+									title="Start a new conversation and clear the stored transcript">New</button>
+							</span>
+						</div>
+						<div id="chatMessages" aria-live="polite">
+							<div id="chatEmpty" class="chat-empty">
+								<p class="chat-empty-title">Ask about the corpus</p>
+								<p class="chat-empty-desc">Questions are answered by querying BHSA
+									directly. Every search is shown, and you can load any of them
+									into the search pad.</p>
+								<div class="chat-suggestions" role="group" aria-label="Suggested questions">
+									<button type="button" class="chat-suggestion">How is the word חסד used?</button>
+									<button type="button" class="chat-suggestion">Is the word for "between" always followed by a Lamed?</button>
+									<button type="button" class="chat-suggestion">What is the fundamental meaning of NTN[?</button>
+									<button type="button" class="chat-suggestion">Which verb stems are most common with >MR[?</button>
+								</div>
+							</div>
+						</div>
+						<div id="chatComposer">
+							<textarea id="chatInput" class="chat-input" rows="2"
+								placeholder="Ask a question about the Hebrew text…"></textarea>
+							<div class="chat-actions">
+								<button type="button" id="chatSend" class="medium active"
+									title="Send (Enter)">Ask</button>
+								<button type="button" id="chatStop" class="small" style="display: none;"
+									title="Stop generating">Stop</button>
+								<span id="chatStatus" class="chat-status"></span>
+							</div>
+						</div>
+					</div>
+				</div>
 				<div status="about">
 					<div>
 						<p><a target="_blank" href="https://github.com/annotation/text-fabric">Text-Fabric</a>

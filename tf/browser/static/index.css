@@ -164,6 +164,36 @@ div.rightcolx {
 	display: block;
 }
 
+/* The chat needs far more room than the other side panels, but widening
+   #sidebarcont unconditionally would shrink the work area for every tab.
+   :has() lets the widening apply only while the chat tab is open. */
+#sidebarcont:has(>div[status=chat].active) {
+	max-width: 36vw;
+	width: 36vw;
+}
+
+/* The columns are sized to their content and never shrink (leftcol is
+   flex: 1 0 auto), so claiming a third of the width for the chat would
+   push the page wider than the viewport. While the chat is open, let
+   them give ground instead. */
+div.page:has(#sidebarcont>div[status=chat].active) div.leftcol,
+div.page:has(#sidebarcont>div[status=chat].active) div.midcol {
+	flex-shrink: 1;
+	min-width: 0;
+}
+
+div.page:has(#sidebarcont>div[status=chat].active) div.rightcolx,
+div.page:has(#sidebarcont>div[status=chat].active) div.rightcol {
+	flex-shrink: 1;
+	min-width: 16vw;
+}
+
+#sidebarcont>div[status=chat].active {
+	max-width: 100%;
+	width: calc(100% - 8px);
+	box-sizing: border-box;
+}
+
 .nodeinfo {
 	font-size: small;
 }
@@ -651,6 +681,397 @@ button#generateQuery:disabled {
 	font-style: italic;
 }
 
+
+/* RESEARCH CHAT
+ *
+ * Layout follows the sidebar-chat pattern: a scrolling message column
+ * above a pinned composer. User turns are tinted bubbles capped at 85%
+ * width; assistant answers are full-width prose, which is what keeps a
+ * long cited answer readable. Tool calls are subordinate to both.
+ */
+
+#chatPanel {
+	display: flex;
+	flex-flow: column nowrap;
+	height: calc(99vh - 40px);
+	min-height: 20rem;
+}
+
+#chatHeader {
+	display: flex;
+	flex-flow: row nowrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 2px 8px 2px;
+	border-bottom: 1px solid var(--fog-rim);
+}
+
+.chat-header-controls {
+	display: flex;
+	flex-flow: row wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+label.chat-depth {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	color: var(--fog-fore);
+}
+
+label.chat-depth input {
+	width: 3.4rem;
+	font-size: 12px;
+	padding: 3px 4px;
+	margin: 0;
+	border: 1px solid var(--fog-rim);
+	border-radius: 4px;
+	text-align: right;
+}
+
+/* Marks where a transcript restored from localStorage begins: the
+   messages are here, but the server may have forgotten the context if it
+   restarted in between. */
+.chat-restored {
+	align-self: center;
+	font-size: 11px;
+	color: var(--fog-fore);
+	font-style: italic;
+	padding: 2px 8px;
+	border-radius: 8px;
+	background-color: var(--haze-back);
+}
+
+#chatMessages {
+	flex: 1 1 auto;
+	display: flex;
+	flex-flow: column nowrap;
+	gap: 12px;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	padding: 12px 4px;
+}
+
+.chat-msg {
+	display: flex;
+	flex-flow: column nowrap;
+}
+
+.chat-user {
+	align-items: flex-end;
+}
+
+.chat-user .chat-body {
+	max-width: 85%;
+	border-radius: 16px;
+	background-color: var(--blue-haze-fore);
+	color: var(--button-fore);
+	padding: 10px 14px;
+	font-size: 14px;
+	line-height: 22px;
+	overflow-wrap: anywhere;
+}
+
+.chat-assistant .chat-body {
+	font-size: 14px;
+	line-height: 22px;
+	overflow-wrap: anywhere;
+}
+
+.chat-note .chat-body {
+	font-size: 13px;
+	line-height: 20px;
+	font-style: italic;
+	color: var(--fog-fore);
+}
+
+.chat-body p {
+	margin: 0 0 8px 0;
+}
+
+.chat-body p:last-child {
+	margin-bottom: 0;
+}
+
+.chat-body ul {
+	margin: 4px 0 8px 0;
+	padding-left: 20px;
+}
+
+.chat-body h3,
+.chat-body h4,
+.chat-body h5,
+.chat-body h6 {
+	margin: 10px 0 4px 0;
+	font-size: 14px;
+}
+
+.chat-body code {
+	font-family: monospace;
+	font-size: 13px;
+	background-color: var(--haze-back);
+	padding: 1px 4px;
+	border-radius: 3px;
+}
+
+/* The agent's basis-and-limits note: visible as a caveat without
+   shouting over the answer itself. */
+blockquote.chat-caveat {
+	margin: 10px 0 4px 0;
+	padding: 6px 10px;
+	border-left: 3px solid var(--blue-haze-fore);
+	background-color: var(--blue-haze-back);
+	border-radius: 0 4px 4px 0;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--fog-fore);
+}
+
+blockquote.chat-caveat p {
+	margin: 0;
+}
+
+blockquote.chat-caveat p + p {
+	margin-top: 4px;
+}
+
+pre.chat-code {
+	background-color: var(--haze-back);
+	border-radius: 4px;
+	padding: 8px;
+	overflow-x: auto;
+	font-size: 13px;
+	margin: 6px 0;
+}
+
+/* Tool calls: a one-line status row, expandable to the full query and
+   what came back. */
+
+.chat-tool {
+	display: flex;
+	flex-flow: column nowrap;
+}
+
+.chat-tool-head {
+	display: flex;
+	flex-flow: row nowrap;
+	align-items: center;
+	gap: 6px;
+	align-self: flex-start;
+	max-width: 100%;
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	padding: 2px 4px;
+	font-size: 12px;
+	font-weight: normal;
+	text-align: left;
+	color: var(--fog-fore);
+	cursor: pointer;
+}
+
+@media (hover: hover) {
+	.chat-tool-head:hover {
+		background-color: var(--haze-back);
+		color: var(--paper-fore);
+	}
+}
+
+.chat-tool-icon {
+	flex: 0 0 auto;
+}
+
+.chat-tool.failed .chat-tool-icon {
+	color: #d32f2f;
+}
+
+.chat-tool-title {
+	flex: 0 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chat-tool-count {
+	flex: 0 0 auto;
+	opacity: 0.75;
+}
+
+.chat-tool-chevron {
+	flex: 0 0 auto;
+	transition: transform 0.15s ease;
+}
+
+.chat-tool-head.open .chat-tool-chevron {
+	transform: rotate(90deg);
+}
+
+.chat-tool-head.open {
+	background-color: var(--haze-back);
+}
+
+.chat-tool-detail {
+	margin: 4px 0 0 8px;
+	padding-left: 10px;
+	border-left: 2px solid var(--fog-rim);
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--fog-fore);
+}
+
+.chat-tool-label {
+	font-weight: bold;
+}
+
+pre.chat-tool-query {
+	font-family: monospace;
+	font-size: 12px;
+	background-color: var(--query-back);
+	border-radius: 4px;
+	padding: 6px;
+	margin: 4px 0;
+	overflow-x: auto;
+	white-space: pre;
+}
+
+.chat-tool-outcome {
+	margin-top: 4px;
+}
+
+.chat-tool-outcome.error {
+	color: #d32f2f;
+}
+
+.chat-tool-sample {
+	margin-top: 4px;
+	display: flex;
+	flex-flow: column nowrap;
+	gap: 2px;
+}
+
+.chat-tool-row {
+	display: flex;
+	flex-flow: row wrap;
+	gap: 6px;
+}
+
+.chat-ref {
+	flex: 0 0 auto;
+	font-weight: bold;
+}
+
+.chat-heb {
+	flex: 1 1 auto;
+	font-size: 15px;
+}
+
+button.chat-load {
+	margin-top: 6px;
+	padding: 4px 10px;
+	background-color: var(--gray-back);
+	color: var(--gray-fore);
+	border: 1px solid var(--fog-rim);
+	border-radius: 4px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+@media (hover: hover) {
+	button.chat-load:hover {
+		background-color: var(--fog-back);
+		color: var(--dark-fore);
+	}
+}
+
+/* Composer */
+
+#chatComposer {
+	flex: 0 0 auto;
+	border-top: 1px solid var(--fog-rim);
+	padding-top: 8px;
+}
+
+textarea.chat-input {
+	width: 100%;
+	box-sizing: border-box;
+	font-family: system-ui;
+	font-size: 14px;
+	padding: 8px;
+	margin: 0;
+	border: 2px solid var(--fog-rim);
+	border-radius: 6px;
+	resize: vertical;
+	background-color: var(--paper-back);
+	color: var(--paper-fore);
+}
+
+.chat-actions {
+	display: flex;
+	flex-flow: row wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.chat-status {
+	flex: 1 1 auto;
+	font-size: 12px;
+	color: var(--fog-fore);
+	overflow-wrap: anywhere;
+}
+
+.chat-status .error {
+	color: #d32f2f;
+	font-weight: bold;
+}
+
+/* Empty state */
+
+.chat-empty {
+	margin: auto 0;
+	padding: 8px 4px;
+}
+
+.chat-empty-title {
+	font-weight: bold;
+	margin: 0 0 4px 0;
+}
+
+.chat-empty-desc {
+	font-size: 13px;
+	color: var(--fog-fore);
+	margin: 0 0 12px 0;
+}
+
+.chat-suggestions {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: 8px;
+}
+
+button.chat-suggestion {
+	text-align: left;
+	font-weight: normal;
+	font-size: 13px;
+	line-height: 18px;
+	padding: 8px 10px;
+	border: 1px solid var(--fog-rim);
+	border-radius: 8px;
+	background-color: transparent;
+	color: var(--paper-fore);
+	cursor: pointer;
+}
+
+@media (hover: hover) {
+	button.chat-suggestion:hover {
+		background-color: var(--haze-back);
+		color: var(--paper-fore);
+	}
+}
+
 /* ==========================================================================
    MOBILE / NARROW SCREENS
 
@@ -751,6 +1172,57 @@ button#generateQuery:disabled {
 		min-width: 0;
 		max-width: 100%;
 		margin: 8px;
+	}
+
+	/* Chat gets the screen: the 60vh cap above is fine for a help panel
+	   but unusable for a conversation. The message list scrolls inside
+	   itself and the composer stays pinned at the bottom, which is what
+	   makes it feel like a chat app rather than a long web page. */
+	#sidebarcont:has(>div[status=chat].active) {
+		max-width: 100%;
+		width: 100%;
+		max-height: none;
+	}
+
+	#chatPanel {
+		height: calc(100vh - 8rem);
+		min-height: 24rem;
+	}
+
+	#chatMessages {
+		padding: 10px 2px;
+	}
+
+	.chat-user .chat-body {
+		max-width: 92%;
+	}
+
+	/* 16px stops iOS Safari zooming the page when the field is focused. */
+	textarea.chat-input {
+		font-size: 16px;
+	}
+
+	#chatSend,
+	#chatStop,
+	#chatReset,
+	button.chat-suggestion {
+		min-height: 44px;
+	}
+
+	.chat-tool-head {
+		padding: 6px 4px;
+		font-size: 13px;
+	}
+
+	/* Long titles wrap instead of being clipped on a narrow screen. */
+	.chat-tool-head {
+		flex-flow: row wrap;
+	}
+
+	.chat-tool-title {
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
 	}
 
 	/* Columns stack and grow with their content. */

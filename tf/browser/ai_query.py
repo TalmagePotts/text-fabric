@@ -316,10 +316,15 @@ def make_executor(app):
     def executor(query, limit=RESULT_CAP):
         msgs = []
         try:
-            res = S.search(query, limit=limit, _msgCache=msgs)
+            # here=False keeps per-search state off the shared S object,
+            # which matters because the browser serves requests threaded.
+            # It also makes search return a 4-tuple ending in the executor.
+            res = S.search(query, limit=limit, here=False, _msgCache=msgs)
         except Exception as e:
             return 0, False, f"Execution error: {e}"
-        if isinstance(res, tuple) and len(res) == 3:
+        if isinstance(res, tuple) and len(res) == 4:
+            results, status, messages, _exe = res
+        elif isinstance(res, tuple) and len(res) == 3:
             results, status, messages = res
         else:
             results, status, messages = res, True, ""
